@@ -1,19 +1,43 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProfController;
+use App\Http\Controllers\SalleController;
+use App\Http\Controllers\EtudiantController;
+use App\Http\Controllers\DisponibiliteController;
+use App\Http\Controllers\EmploiDuTempsController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
-*/
+// ─── PUBLIC ───────────────────────────────────────────────────────────────────
+Route::get('/emploi-du-temps/public', [EmploiDuTempsController::class, 'public']);
+Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+// ─── AUTHENTIFIÉ ──────────────────────────────────────────────────────────────
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me',      [AuthController::class, 'me']);
+
+    // ─── PROF ─────────────────────────────────────────────────────────────────
+    Route::prefix('mes-disponibilites')->group(function () {
+        Route::get('/',                   [DisponibiliteController::class, 'myDispos']);
+        Route::post('/',                  [DisponibiliteController::class, 'store']);
+        Route::delete('/{disponibilite}', [DisponibiliteController::class, 'destroy']);
+    });
+
+    // ─── ADMIN ONLY ───────────────────────────────────────────────────────────
+    Route::middleware('is_admin')->group(function () {
+
+        Route::apiResource('profs',     ProfController::class);
+        Route::apiResource('salles',    SalleController::class);
+        Route::apiResource('etudiants', EtudiantController::class);
+
+        Route::get('disponibilites/prof/{profId}', [DisponibiliteController::class, 'byProf']);
+
+        Route::post('emploi-du-temps/envoyer-etudiants', [EmploiDuTempsController::class, 'envoyerEmail']);
+        Route::post('emploi-du-temps/envoyer-profs',     [EmploiDuTempsController::class, 'envoyerEmailProfs']);
+
+        Route::apiResource('emploi-du-temps', EmploiDuTempsController::class)
+            ->except(['show']);
+    });
 });
