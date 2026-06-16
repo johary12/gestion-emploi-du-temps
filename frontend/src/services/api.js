@@ -82,6 +82,7 @@ export const etudiantService = {
 
 // ─── Emploi du temps ───────────────────────────────────────────────────────────
 export const edtService = {
+  // Admin endpoints
   getAll: () => api.get('/emploi-du-temps'),
   getOne: (id) => api.get(`/emploi-du-temps/${id}`),
   create: (data) => api.post('/emploi-du-temps', data),
@@ -91,6 +92,8 @@ export const edtService = {
   getByProfAndWeek: (profId, weekStart) => 
     api.get(`/emploi-du-temps/prof/${profId}/semaine/${weekStart}`),
   filter: (params) => api.get('/emploi-du-temps/filter', { params }),
+  
+  // Professor endpoints - THESE ARE WHAT PROFESSORS SHOULD USE
   getMySchedule: () => api.get('/prof/mon-emploi-du-temps'),
   getMyScheduleByWeek: (date) => 
     api.get(`/prof/mon-emploi-du-temps/semaine/${date}`),
@@ -98,56 +101,40 @@ export const edtService = {
 
 // ─── Disponibilités ────────────────────────────────────────────────────────────
 export const disponibiliteService = {
+  // Admin endpoints
   getAll: () => api.get('/disponibilites'),
   getByProf: (profId) => api.get(`/disponibilites/prof/${profId}`),
   create: (data) => api.post('/disponibilites', data),
+  update: (id, data) => api.put(`/disponibilites/${id}`, data),
   delete: (id) => api.delete(`/disponibilites/${id}`),
+  
+  // Professor endpoints
   getMyDispos: () => api.get('/mes-disponibilites'),
 };
 
-// ✅ EMAIL SERVICE - Version finale corrigée
+// ─── Email Service ─────────────────────────────────────────────────────────────
 export const emailService = {
   sendEmploiDuTemps: async (data) => {
-    // ✅ S'assurer que le payload contient TOUS les champs requis
     const payload = {
-      subject: data.subject || 'Emploi du temps',
-      message: data.message || '',
-      recipients: data.recipients || [],
-      weekRange: data.weekRange || '',
-      weekStart: data.weekStart || '',
       niveau: data.niveau || 'L1',
-      parcours: data.parcours || 'Génie Logiciel',
-      courses: data.courses || [],
-      sendAsPdf: data.sendAsPdf !== undefined ? data.sendAsPdf : true,
-      pdfFilename: data.pdfFilename || `emploi-du-temps-${data.weekStart || 'semaine'}.pdf`
+      parcours: data.parcours || 'Génie Logiciel'
     };
     
-    console.log('📧 Email Service - Payload final:', JSON.stringify(payload, null, 2));
     const response = await api.post('/emploi-du-temps/envoyer-etudiants', payload);
-    return response.data;
+    return { success: true, message: response.data.message || 'Emails envoyés avec succès' };
   },
   
   sendEmploiDuTempsToProfs: async (data) => {
-    const payload = {
-      subject: data.subject || 'Emploi du temps',
-      message: data.message || '',
-      recipients: data.recipients || [],
-      weekRange: data.weekRange || '',
-      weekStart: data.weekStart || '',
-      courses: data.courses || [],
-      sendAsPdf: data.sendAsPdf !== undefined ? data.sendAsPdf : true,
-      pdfFilename: data.pdfFilename || `emploi-du-temps-${data.weekStart || 'semaine'}.pdf`
-    };
-    
-    const response = await api.post('/emploi-du-temps/envoyer-profs', payload);
-    return response.data;
+    const response = await api.post('/emploi-du-temps/envoyer-profs', data);
+    return { success: true, message: response.data.message || 'Emails envoyés avec succès' };
   },
 };
 
-// ─── Prof Services ────────────────────────────────────────────────────────────
+// ─── Prof Services (alias pour clarté) ──────────────────────────────────────
 export const dispoService = {
   getMyDispos: () => api.get('/mes-disponibilites'),
   create: (data) => api.post('/mes-disponibilites', data),
+  update: (id, data) => api.put(`/mes-disponibilites/${id}`, data),
   delete: (id) => api.delete(`/mes-disponibilites/${id}`),
   getByProf: (profId) => api.get(`/disponibilites/prof/${profId}`),
 };

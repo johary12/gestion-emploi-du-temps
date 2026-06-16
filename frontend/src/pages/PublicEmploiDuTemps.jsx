@@ -1,20 +1,18 @@
-// src/pages/PublicEmploiDuTemps.jsx - Version avec affichage fusionné
-import { useState, useEffect, useCallback, useRef } from 'react';
+// src/pages/PublicEmploiDuTemps.jsx - Version corrigée avec route publique
+
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { edtService, profService, salleService } from '../services/api';
+import { publicService } from '../services/api';
 import { 
   Calendar, Clock, User, MapPin, Filter, ChevronLeft, ChevronRight,
   School, GraduationCap, AlertCircle, LogIn, FileText, Loader2,
   DoorOpen, BookOpen
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const NIVEAUX = ['L1', 'L2', 'L3', 'M1', 'M2'];
 const PARCOURS = ['Génie Logiciel', 'Réseaux & Télécoms', "Systèmes d'Information", 'Sécurité Informatique'];
 
-// ✅ Fonction pour formater en date locale
 function toLocalDateString(date) {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -23,14 +21,6 @@ function toLocalDateString(date) {
   return `${year}-${month}-${day}`;
 }
 
-// ✅ Fonction pour extraire la date d'une chaîne ISO
-function extractDateFromISO(isoDate) {
-  if (!isoDate) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
-  return isoDate.split('T')[0];
-}
-
-// ✅ Fonction pour obtenir le lundi de la semaine
 function getWeekStartDate(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -43,35 +33,31 @@ function getWeekStartDate(date) {
 export default function PublicEmploiDuTemps() {
   const [courses, setCourses] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
-  const [profs, setProfs] = useState([]);
-  const [salles, setSalles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
   const [weekDays, setWeekDays] = useState([]);
   const [filters, setFilters] = useState({ niveau: '', parcours: '' });
   const [showFilters, setShowFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   const edtRef = useRef(null);
 
-  // ✅ Mettre à jour les jours de la semaine
   useEffect(() => {
     if (currentWeekStart) {
       updateWeekDays(currentWeekStart);
     }
   }, [currentWeekStart]);
 
-  // ✅ Filtrer les cours quand les données changent
   useEffect(() => {
     if (courses.length > 0 && currentWeekStart) {
       filterCoursesByWeek();
     }
   }, [courses, currentWeekStart, filters]);
 
-  // ✅ Charger les données au démarrage
   useEffect(() => {
-    loadAllData();
-  }, []);
+    loadCourses();
+  }, [currentWeekStart]);
 
   function updateWeekDays(date) {
     if (!date) return;
@@ -114,36 +100,23 @@ export default function PublicEmploiDuTemps() {
     return weekDays.length ? `${weekDays[0].formattedDate} - ${weekDays[5].formattedDate}` : ''; 
   }
 
-  // ✅ Fonction pour filtrer les cours par semaine (comme l'Admin)
   function filterCoursesByWeek() {
     if (!currentWeekStart) {
-      console.log('⚠️ currentWeekStart est null');
       return;
     }
     
     const weekStartStr = toLocalDateString(currentWeekStart);
     
-    console.log('=== DEBUG PUBLIC EDT ===');
-    console.log('📅 Début de semaine:', weekStartStr);
-    console.log('📚 Nombre total de cours:', courses.length);
-    
-    // ✅ Filtrer par semaine en extrayant la date
     let filtered = courses.filter(course => {
       if (!course) return false;
-      if (!course.date_debut_semaine) return false;
-      
-      const courseDate = extractDateFromISO(course.date_debut_semaine);
-      const match = courseDate === weekStartStr;
-      
-      if (match) {
-        console.log('✅ Cours trouvé:', course.matiere, course.jour);
+      // Vérifier si le cours correspond à la semaine
+      if (course.date_debut_semaine) {
+        const courseDate = course.date_debut_semaine.split('T')[0];
+        return courseDate === weekStartStr;
       }
-      return match;
+      return false;
     });
     
-    console.log('📊 Cours filtrés pour cette semaine:', filtered.length);
-    
-    // Appliquer les filtres niveau et parcours
     if (filters.niveau) {
       filtered = filtered.filter(c => c.niveau === filters.niveau);
     }
@@ -151,124 +124,98 @@ export default function PublicEmploiDuTemps() {
       filtered = filtered.filter(c => c.parcours === filters.parcours);
     }
     
-    console.log('📊 Cours après filtres:', filtered.length);
     setFilteredCourses(filtered);
   }
 
-  // ✅ Charger toutes les données (comme l'Admin)
-  const loadAllData = async () => {
+  // ✅ Utiliser la route publique au lieu des routes protégées
+  const loadCourses = async () => {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([
-        loadCourses(),
-        loadProfs(),
-        loadSalles()
-      ]);
+      const weekStartStr = toLocalDateString(currentWeekStart);
       
-      console.log('✅ Toutes les données chargées');
+      // Appel à la route publique avec les filtres
+      const response = await publicService.getEmploi(
+        filters.niveau || '',
+        filters.parcours || '',
+        weekStartStr
+      );
+      
+      console.log('📦 Cours publics chargés:', response.data?.length || 0);
+      
+      if (response.data && Array.isArray(response.data)) {
+        setCourses(response.data);
+      } else {
+        setCourses([]);
+      }
     } catch (error) {
-      console.error('Erreur chargement:', error);
-      setError('Impossible de charger les données.');
+      console.error('Erreur chargement cours publics:', error);
+      if (error.response?.status === 401) {
+        setError('Vous devez être connecté pour accéder à cette page. Veuillez vous connecter.');
+      } else {
+        setError('Impossible de charger l\'emploi du temps. Veuillez réessayer.');
+      }
+      setCourses([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Charger les cours depuis l'API (comme l'Admin)
-  const loadCourses = async () => {
-    try {
-      const res = await edtService.getAll();
-      console.log('📦 Cours chargés depuis API:', res.data?.length || 0, 'cours');
-      if (res.data && res.data.length > 0) {
-        console.log('📋 Exemple de cours:', res.data[0]);
-        const dates = res.data.map(c => extractDateFromISO(c.date_debut_semaine));
-        console.log('📋 Dates début semaine des cours (extraites):', [...new Set(dates)]);
-      }
-      setCourses(res.data || []);
-    } catch (error) {
-      console.error('Erreur chargement cours:', error);
-      throw error;
+  // Recharger quand les filtres changent
+  useEffect(() => {
+    if (!loading) {
+      loadCourses();
     }
-  };
-
-  // ✅ Charger les professeurs
-  const loadProfs = async () => {
-    try {
-      const res = await profService.getAll();
-      setProfs(res.data || []);
-    } catch (error) {
-      console.error('Erreur chargement professeurs:', error);
-    }
-  };
-
-  // ✅ Charger les salles
-  const loadSalles = async () => {
-    try {
-      const res = await salleService.getAll();
-      setSalles(res.data || []);
-    } catch (error) {
-      console.error('Erreur chargement salles:', error);
-    }
-  };
-
-  const getProfName = (id) => {
-    const prof = profs.find(p => p.id === id);
-    return prof?.name || 'À confirmer';
-  };
-
-  const getSalleName = (id) => {
-    const salle = salles.find(s => s.id === id);
-    return salle?.nom || 'À confirmer';
-  };
-
-  const getCoursesByDay = (dayName) => {
-    return filteredCourses.filter(c => c.jour === dayName);
-  };
-
-  // Exporter en PDF
-  const exportPDF = async () => {
-    if (!edtRef.current) return;
-    
-    try {
-      setLoading(true);
-      const element = edtRef.current;
-      
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        allowTaint: true,
-        width: element.scrollWidth,
-        height: element.scrollHeight,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [canvas.width * 0.75, canvas.height * 0.75]
-      });
-      
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Emploi_du_temps_${getWeekRange().replace(/ /g, '_')}.pdf`);
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Erreur lors de l\'export PDF:', error);
-      setError('Erreur lors de l\'export du PDF');
-      setLoading(false);
-    }
-  };
+  }, [filters]);
 
   const resetFilters = () => {
     setFilters({ niveau: '', parcours: '' });
+  };
+
+  // Exporter en PDF simplifié
+  const exportPDF = async () => {
+    if (!edtRef.current) return;
+    
+    setExporting(true);
+    try {
+      const printWindow = window.open('', '_blank', 'width=1200,height=800');
+      if (printWindow) {
+        const content = edtRef.current.innerHTML;
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Emploi du temps - ${getWeekRange()}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              .day-card { border: 1px solid #ccc; margin-bottom: 10px; padding: 10px; }
+              .day-header { background: #f0f0f0; padding: 10px; font-weight: bold; }
+              .course-card { border: 1px solid #eee; margin: 5px 0; padding: 8px; }
+              .course-title { font-weight: bold; }
+              .course-info { font-size: 12px; color: #666; }
+              .badge { background: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px; }
+              @media print {
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Emploi du temps - ${getWeekRange()}</h1>
+            <div id="print-content">${content}</div>
+            <script>
+              window.onload = function() { window.print(); }
+            <\/script>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      setError('Erreur lors de l\'export du PDF');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) {
@@ -276,6 +223,12 @@ export default function PublicEmploiDuTemps() {
       <div style={styles.loadingContainer}>
         <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} />
         <p style={styles.loadingText}>Chargement de l'emploi du temps...</p>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -286,10 +239,23 @@ export default function PublicEmploiDuTemps() {
         <AlertCircle size={48} style={styles.errorIcon} />
         <h2 style={styles.errorTitle}>Erreur</h2>
         <p style={styles.errorMessage}>{error}</p>
-        <button onClick={() => loadAllData()} style={styles.retryButton}>Réessayer</button>
+        {error.includes('connecté') ? (
+          <Link to="/login" style={styles.loginLink}>
+            <button style={styles.retryButton}>
+              <LogIn size={18} style={{ marginRight: '8px' }} />
+              Se connecter
+            </button>
+          </Link>
+        ) : (
+          <button onClick={() => loadCourses()} style={styles.retryButton}>
+            Réessayer
+          </button>
+        )}
       </div>
     );
   }
+
+  const hasCourses = filteredCourses.length > 0;
 
   return (
     <div style={styles.container}>
@@ -339,9 +305,9 @@ export default function PublicEmploiDuTemps() {
             <span>{getWeekRange()}</span>
           </div>
           
-          <button onClick={exportPDF} style={styles.exportButton}>
+          <button onClick={exportPDF} style={styles.exportButton} disabled={exporting || !hasCourses}>
             <FileText size={18} />
-            Exporter PDF
+            {exporting ? 'Export...' : 'Exporter PDF'}
           </button>
           
           <button 
@@ -365,7 +331,7 @@ export default function PublicEmploiDuTemps() {
               style={styles.select}
             >
               <option value="">📚 Tous niveaux</option>
-              {NIVEAUX.map(n => <option key={n}>{n}</option>)}
+              {NIVEAUX.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
             <select 
               value={filters.parcours} 
@@ -373,7 +339,7 @@ export default function PublicEmploiDuTemps() {
               style={styles.select}
             >
               <option value="">🎓 Tous parcours</option>
-              {PARCOURS.map(p => <option key={p}>{p}</option>)}
+              {PARCOURS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <button 
               onClick={resetFilters} 
@@ -384,71 +350,76 @@ export default function PublicEmploiDuTemps() {
           </div>
         )}
 
-        {/* ✅ Affichage de l'emploi du temps - Version fusionnée */}
+        {/* Affichage de l'emploi du temps */}
         <div ref={edtRef} style={styles.edtContent}>
-          {/* Grille des cours avec en-tête intégré */}
-          <div style={styles.coursesGrid}>
-            {weekDays.map((day, idx) => {
-              const dayCourses = getCoursesByDay(day.dayName);
-              const isToday = new Date().toDateString() === day.date.toDateString();
-              return (
-                <div key={idx} style={styles.dayCard}>
-                  {/* En-tête du jour intégré */}
-                  <div style={{
-                    ...styles.dayHeader,
-                    backgroundColor: isToday ? '#dbeafe' : '#f8fafc',
-                    borderBottom: isToday ? '2px solid #2563eb' : '1px solid #e2e8f0'
-                  }}>
-                    <div style={styles.dayName}>{day.dayName}</div>
-                    <div style={styles.dayDate}>{day.dayNumber} {day.monthName}</div>
-                    <div style={styles.dayCountBadge}>
-                      <span style={styles.dayCountNumber}>{dayCourses.length}</span>
-                      <span style={styles.dayCountLabel}>cours</span>
+          {!hasCourses && !loading ? (
+            <div style={styles.noCoursesContainer}>
+              <BookOpen size={48} style={styles.noCoursesIcon} />
+              <p style={styles.noCoursesText}>Aucun cours programmé pour cette semaine</p>
+              <p style={styles.noCoursesSubtext}>Vérifiez les filtres ou changez de semaine</p>
+            </div>
+          ) : (
+            <div style={styles.coursesGrid}>
+              {weekDays.map((day, idx) => {
+                const dayCourses = filteredCourses.filter(c => c.jour === day.dayName);
+                const isToday = new Date().toDateString() === day.date.toDateString();
+                return (
+                  <div key={idx} style={styles.dayCard}>
+                    <div style={{
+                      ...styles.dayHeader,
+                      backgroundColor: isToday ? '#dbeafe' : '#f8fafc',
+                      borderBottom: isToday ? '2px solid #2563eb' : '1px solid #e2e8f0'
+                    }}>
+                      <div style={styles.dayName}>{day.dayName}</div>
+                      <div style={styles.dayDate}>{day.dayNumber} {day.monthName}</div>
+                      <div style={styles.dayCountBadge}>
+                        <span style={styles.dayCountNumber}>{dayCourses.length}</span>
+                        <span style={styles.dayCountLabel}>cours</span>
+                      </div>
+                    </div>
+                    
+                    <div style={styles.courseList}>
+                      {dayCourses.length === 0 ? (
+                        <div style={styles.emptyState}>Aucun cours</div>
+                      ) : (
+                        dayCourses.map((course, i) => (
+                          <div key={i} style={styles.courseCard}>
+                            <div style={styles.courseTitle}>{course.matiere || 'Sans titre'}</div>
+                            
+                            <div style={styles.courseInfoRow}>
+                              <Clock size={12} style={styles.infoIcon} />
+                              <span style={styles.courseInfoText}>
+                                {course.heure_debut?.substring(0,5) || '--:--'} - {course.heure_fin?.substring(0,5) || '--:--'}
+                              </span>
+                            </div>
+                            
+                            <div style={styles.courseInfoRow}>
+                              <User size={12} style={styles.infoIcon} />
+                              <span style={styles.courseInfoText}>{course.prof || 'À confirmer'}</span>
+                            </div>
+                            
+                            <div style={styles.courseInfoRow}>
+                              <DoorOpen size={12} style={styles.infoIcon} />
+                              <span style={styles.courseInfoText}>{course.salle || 'À confirmer'}</span>
+                            </div>
+                            
+                            <div style={styles.badgeContainer}>
+                              <span style={styles.badge}>
+                                {course.niveau || 'N/A'}
+                              </span>
+                              <span style={styles.badge}>
+                                {course.parcours || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                  
-                  {/* Liste des cours */}
-                  <div style={styles.courseList}>
-                    {dayCourses.length === 0 ? (
-                      <div style={styles.emptyState}>Aucun cours</div>
-                    ) : (
-                      dayCourses.map((course, i) => (
-                        <div key={i} style={styles.courseCard}>
-                          <div style={styles.courseTitle}>{course.matiere || 'Sans titre'}</div>
-                          
-                          <div style={styles.courseInfoRow}>
-                            <Clock size={12} style={styles.infoIcon} />
-                            <span style={styles.courseInfoText}>
-                              {course.heure_debut?.substring(0,5) || '--:--'} - {course.heure_fin?.substring(0,5) || '--:--'}
-                            </span>
-                          </div>
-                          
-                          <div style={styles.courseInfoRow}>
-                            <User size={12} style={styles.infoIcon} />
-                            <span style={styles.courseInfoText}>{getProfName(course.user_id)}</span>
-                          </div>
-                          
-                          <div style={styles.courseInfoRow}>
-                            <DoorOpen size={12} style={styles.infoIcon} />
-                            <span style={styles.courseInfoText}>{getSalleName(course.salle_id)}</span>
-                          </div>
-                          
-                          <div style={styles.badgeContainer}>
-                            <span style={styles.badge}>
-                              {course.niveau || 'N/A'}
-                            </span>
-                            <span style={styles.badge}>
-                              {course.parcours || 'N/A'}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -472,12 +443,47 @@ export default function PublicEmploiDuTemps() {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @media (max-width: 1200px) {
+          .courses-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .courses-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .hero-content {
+            flex-direction: column;
+            text-align: center;
+          }
+          .hero-text {
+            flex-direction: column;
+          }
+          .navigation-bar {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .filters-panel {
+            flex-direction: column;
+          }
+          .select {
+            min-width: 100%;
+          }
+        }
+        @media (max-width: 480px) {
+          .courses-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .day-card {
+            height: auto !important;
+            min-height: 200px;
+          }
+        }
       `}</style>
     </div>
   );
 }
 
-// Styles fusionnés
 const styles = {
   container: {
     minHeight: '100vh',
@@ -535,6 +541,12 @@ const styles = {
     fontWeight: 500,
     fontSize: '14px',
     transition: 'all 0.2s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  
+  loginLink: {
+    textDecoration: 'none',
   },
   
   heroBanner: {
@@ -575,9 +587,6 @@ const styles = {
     fontWeight: 400,
   },
   
-  loginLink: {
-    textDecoration: 'none',
-  },
   loginButton: {
     display: 'flex',
     alignItems: 'center',
@@ -604,6 +613,7 @@ const styles = {
     padding: '16px',
     borderRadius: '12px',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    minHeight: '200px',
   },
   
   header: {
@@ -737,14 +747,12 @@ const styles = {
     transition: 'all 0.2s ease',
   },
   
-  // ✅ Grille fusionnée - une seule structure
   coursesGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
     gap: '8px',
   },
   
-  // ✅ Jour entier (en-tête + cours)
   dayCard: {
     backgroundColor: 'white',
     borderRadius: '8px',
@@ -756,7 +764,6 @@ const styles = {
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
   },
   
-  // ✅ En-tête du jour
   dayHeader: {
     padding: '10px 8px',
     textAlign: 'center',
@@ -792,7 +799,6 @@ const styles = {
     fontWeight: 400,
   },
   
-  // ✅ Liste des cours
   courseList: {
     padding: '8px',
     flex: 1,
@@ -808,7 +814,6 @@ const styles = {
     fontSize: '12px',
   },
   
-  // ✅ Course card
   courseCard: {
     padding: '8px 10px',
     marginBottom: '6px',
@@ -849,6 +854,27 @@ const styles = {
     borderRadius: '8px',
     color: '#475569',
     fontWeight: 500,
+  },
+
+  noCoursesContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '60px 20px',
+    gap: '12px',
+  },
+  noCoursesIcon: {
+    color: '#cbd5e1',
+  },
+  noCoursesText: {
+    fontSize: '18px',
+    fontWeight: 600,
+    color: '#1e293b',
+  },
+  noCoursesSubtext: {
+    fontSize: '14px',
+    color: '#94a3b8',
   },
   
   footer: {

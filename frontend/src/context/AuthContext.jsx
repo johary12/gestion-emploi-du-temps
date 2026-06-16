@@ -83,7 +83,6 @@ export const AuthProvider = ({ children }) => {
         newPassword
       });
       
-      // Mettre à jour l'utilisateur dans le localStorage
       if (user) {
         const updatedUser = { ...user };
         updatedUser.passwordChangedAt = new Date().toISOString();
@@ -113,6 +112,8 @@ export const AuthProvider = ({ children }) => {
     updateUser,
     isAdmin: user?.role === 'admin',
     isProf: user?.role === 'prof',
+    isEtudiant: user?.role === 'etudiant',
+    isAuthenticated: !!user && !!localStorage.getItem('token'),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -126,12 +127,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-// ✅ Export par défaut pour compatibilité avec Vite Fast Refresh
-const AuthContextExport = {
-  AuthProvider,
-  useAuth,
-  AuthContext
-};
-
-export default AuthContextExport;

@@ -1,4 +1,5 @@
 <?php
+// routes/api.php
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfController;
@@ -20,7 +21,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     
-    // ── Routes Admin (middleware is_admin) ──
+    // ── Routes Professeur (accessible à tous les utilisateurs authentifiés) ──
+    Route::prefix('prof')->group(function () {
+        // Récupérer l'emploi du temps du professeur connecté pour la semaine actuelle
+        Route::get('/mon-emploi-du-temps', [EmploiDuTempsController::class, 'mySchedule']);
+        
+        // Récupérer l'emploi du temps du professeur pour une semaine spécifique
+        Route::get('/mon-emploi-du-temps/semaine/{date}', 
+            [EmploiDuTempsController::class, 'myScheduleByWeek']);
+    });
+    
+    // ── Routes Professeur pour les disponibilités ──
+    Route::prefix('mes-disponibilites')->group(function () {
+        Route::get('/', [DisponibiliteController::class, 'myDispos']);
+        Route::post('/', [DisponibiliteController::class, 'store']);
+        Route::delete('/{disponibilite}', [DisponibiliteController::class, 'destroy']);
+    });
+    
+    // ── Routes Admin (uniquement pour les administrateurs) ──
     Route::middleware('is_admin')->group(function () {
         
         // CRUD Professeurs
@@ -32,50 +50,34 @@ Route::middleware('auth:sanctum')->group(function () {
         // CRUD Étudiants
         Route::apiResource('etudiants', EtudiantController::class);
         
-        // ── Emploi du temps ──
-        // CRUD de base
+        // ── Emploi du temps (Admin) ──
         Route::apiResource('emploi-du-temps', EmploiDuTempsController::class);
         
-        // ✅ Récupérer les cours d'une semaine spécifique
-        Route::get('/emploi-du-temps/semaine/{date}', [EmploiDuTempsController::class, 'getByWeek']);
+        // Récupérer les cours d'une semaine spécifique
+        Route::get('/emploi-du-temps/semaine/{date}', 
+            [EmploiDuTempsController::class, 'getByWeek']);
         
-        // ✅ Récupérer les cours d'un professeur pour une semaine
+        // Récupérer les cours d'un professeur pour une semaine
         Route::get('/emploi-du-temps/prof/{profId}/semaine/{weekStart}', 
             [EmploiDuTempsController::class, 'getByProfAndWeek']);
         
-        // ✅ Récupérer les cours par niveau et parcours pour une semaine
-        Route::get('/emploi-du-temps/filter', [EmploiDuTempsController::class, 'filterByCriteria']);
+        // Récupérer les cours par niveau et parcours pour une semaine
+        Route::get('/emploi-du-temps/filter', 
+            [EmploiDuTempsController::class, 'filterByCriteria']);
         
-        // ✅ Envoyer email aux étudiants
+        // Envoyer email aux étudiants
         Route::post('/emploi-du-temps/envoyer-etudiants', 
             [EmploiDuTempsController::class, 'envoyerEmail']);
         
-        // ✅ Envoyer email aux professeurs
+        // Envoyer email aux professeurs
         Route::post('/emploi-du-temps/envoyer-profs', 
             [EmploiDuTempsController::class, 'envoyerEmailProfs']);
         
-        // ── Disponibilités ──
-        Route::get('disponibilites/prof/{profId}', 
+        // ── Disponibilités (Admin) ──
+        Route::get('/disponibilites/prof/{profId}', 
             [DisponibiliteController::class, 'byProf']);
         
-        // CRUD Disponibilités
-        Route::apiResource('disponibilites', DisponibiliteController::class)->except(['index', 'show']);
-    });
-    
-    // ── Routes Professeur ──
-    Route::prefix('mes-disponibilites')->group(function () {
-        Route::get('/', [DisponibiliteController::class, 'myDispos']);
-        Route::post('/', [DisponibiliteController::class, 'store']);
-        Route::delete('/{disponibilite}', [DisponibiliteController::class, 'destroy']);
-    });
-    
-    // ── Routes Professeur pour l'emploi du temps ──
-    Route::prefix('prof')->group(function () {
-        // Récupérer l'emploi du temps du professeur connecté pour la semaine actuelle
-        Route::get('/mon-emploi-du-temps', [EmploiDuTempsController::class, 'mySchedule']);
-        
-        // Récupérer l'emploi du temps du professeur pour une semaine spécifique
-        Route::get('/mon-emploi-du-temps/semaine/{date}', 
-            [EmploiDuTempsController::class, 'myScheduleByWeek']);
+        Route::apiResource('disponibilites', DisponibiliteController::class)
+            ->except(['index', 'show']);
     });
 });

@@ -1,5 +1,5 @@
 // src/App.jsx
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
@@ -45,7 +45,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// ✅ AppContent avec les routes
+// ✅ AppContent avec les routes (utilisé à l'intérieur de BrowserRouter)
 function AppContent() {
   return (
     <Routes>
@@ -119,11 +119,13 @@ function AppContent() {
   );
 }
 
-// ✅ App wrapper avec ThemeProvider
+// ✅ App wrapper avec ThemeProvider ET BrowserRouter
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
     </ThemeProvider>
   );
 }
