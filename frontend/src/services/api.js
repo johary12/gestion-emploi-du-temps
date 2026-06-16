@@ -1,3 +1,4 @@
+// src/services/api.js
 import axios from 'axios';
 
 const api = axios.create({
@@ -30,20 +31,29 @@ api.interceptors.response.use(
 
 export default api;
 
-// Auth Service
+// ─── Auth Service ──────────────────────────────────────────────────────────────
 export const authService = {
   login: (data) => api.post('/login', data),
   logout: () => api.post('/logout'),
   me: () => api.get('/me'),
+  changePassword: (data) => api.post('/change-password', data),
 };
 
-// Public Service
+// ─── Public Service ────────────────────────────────────────────────────────────
 export const publicService = {
-  getEmploi: (niveau, parcours) =>
-    api.get('/emploi-du-temps/public', { params: { niveau, parcours } }),
+  getEmploi: (niveau, parcours, date_debut_semaine) =>
+    api.get('/emploi-du-temps/public', { 
+      params: { 
+        niveau, 
+        parcours,
+        date_debut_semaine 
+      } 
+    }),
 };
 
-// Admin Services
+// ─── Admin Services ────────────────────────────────────────────────────────────
+
+// Professeurs
 export const profService = {
   getAll: () => api.get('/profs'),
   getOne: (id) => api.get(`/profs/${id}`),
@@ -52,6 +62,7 @@ export const profService = {
   delete: (id) => api.delete(`/profs/${id}`),
 };
 
+// Salles
 export const salleService = {
   getAll: () => api.get('/salles'),
   getOne: (id) => api.get(`/salles/${id}`),
@@ -60,6 +71,7 @@ export const salleService = {
   delete: (id) => api.delete(`/salles/${id}`),
 };
 
+// Étudiants
 export const etudiantService = {
   getAll: (filters) => api.get('/etudiants', { params: filters }),
   getOne: (id) => api.get(`/etudiants/${id}`),
@@ -68,35 +80,71 @@ export const etudiantService = {
   delete: (id) => api.delete(`/etudiants/${id}`),
 };
 
+// ─── Emploi du temps ───────────────────────────────────────────────────────────
 export const edtService = {
   getAll: () => api.get('/emploi-du-temps'),
   getOne: (id) => api.get(`/emploi-du-temps/${id}`),
   create: (data) => api.post('/emploi-du-temps', data),
   update: (id, data) => api.put(`/emploi-du-temps/${id}`, data),
   delete: (id) => api.delete(`/emploi-du-temps/${id}`),
-  envoyerEtudiants: (data) => api.post('/emploi-du-temps/envoyer-etudiants', data),
-  envoyerProfs: (data) => api.post('/emploi-du-temps/envoyer-profs', data),
+  getByWeek: (date) => api.get(`/emploi-du-temps/semaine/${date}`),
+  getByProfAndWeek: (profId, weekStart) => 
+    api.get(`/emploi-du-temps/prof/${profId}/semaine/${weekStart}`),
+  filter: (params) => api.get('/emploi-du-temps/filter', { params }),
+  getMySchedule: () => api.get('/prof/mon-emploi-du-temps'),
+  getMyScheduleByWeek: (date) => 
+    api.get(`/prof/mon-emploi-du-temps/semaine/${date}`),
 };
 
+// ─── Disponibilités ────────────────────────────────────────────────────────────
 export const disponibiliteService = {
   getAll: () => api.get('/disponibilites'),
   getByProf: (profId) => api.get(`/disponibilites/prof/${profId}`),
   create: (data) => api.post('/disponibilites', data),
   delete: (id) => api.delete(`/disponibilites/${id}`),
+  getMyDispos: () => api.get('/mes-disponibilites'),
 };
 
+// ✅ EMAIL SERVICE - Version finale corrigée
 export const emailService = {
   sendEmploiDuTemps: async (data) => {
-    const response = await api.post('/emploi-du-temps/envoyer-etudiants', data);
+    // ✅ S'assurer que le payload contient TOUS les champs requis
+    const payload = {
+      subject: data.subject || 'Emploi du temps',
+      message: data.message || '',
+      recipients: data.recipients || [],
+      weekRange: data.weekRange || '',
+      weekStart: data.weekStart || '',
+      niveau: data.niveau || 'L1',
+      parcours: data.parcours || 'Génie Logiciel',
+      courses: data.courses || [],
+      sendAsPdf: data.sendAsPdf !== undefined ? data.sendAsPdf : true,
+      pdfFilename: data.pdfFilename || `emploi-du-temps-${data.weekStart || 'semaine'}.pdf`
+    };
+    
+    console.log('📧 Email Service - Payload final:', JSON.stringify(payload, null, 2));
+    const response = await api.post('/emploi-du-temps/envoyer-etudiants', payload);
     return response.data;
   },
+  
   sendEmploiDuTempsToProfs: async (data) => {
-    const response = await api.post('/emploi-du-temps/envoyer-profs', data);
+    const payload = {
+      subject: data.subject || 'Emploi du temps',
+      message: data.message || '',
+      recipients: data.recipients || [],
+      weekRange: data.weekRange || '',
+      weekStart: data.weekStart || '',
+      courses: data.courses || [],
+      sendAsPdf: data.sendAsPdf !== undefined ? data.sendAsPdf : true,
+      pdfFilename: data.pdfFilename || `emploi-du-temps-${data.weekStart || 'semaine'}.pdf`
+    };
+    
+    const response = await api.post('/emploi-du-temps/envoyer-profs', payload);
     return response.data;
   },
 };
 
-// Prof Services
+// ─── Prof Services ────────────────────────────────────────────────────────────
 export const dispoService = {
   getMyDispos: () => api.get('/mes-disponibilites'),
   create: (data) => api.post('/mes-disponibilites', data),

@@ -1,4 +1,5 @@
 <?php
+// app/Models/EmploiDuTemps.php
 
 namespace App\Models;
 
@@ -17,7 +18,13 @@ class EmploiDuTemps extends Model
         'jour',
         'heure_debut',
         'heure_fin',
-        'date_debut_semaine'
+        'date_debut_semaine',
+    ];
+
+    protected $casts = [
+        'date_debut_semaine' => 'date',
+        'heure_debut' => 'string',
+        'heure_fin' => 'string',
     ];
 
     public function prof()
@@ -28,5 +35,23 @@ class EmploiDuTemps extends Model
     public function salle()
     {
         return $this->belongsTo(Salle::class);
+    }
+
+    // Scope pour filtrer par semaine
+    public function scopeForWeek($query, $weekStart)
+    {
+        return $query->where('date_debut_semaine', $weekStart);
+    }
+
+    // Scope pour filtrer par niveau
+    public function scopeForNiveau($query, $niveau)
+    {
+        return $query->where('niveau', $niveau);
+    }
+
+    // Scope pour filtrer par parcours
+    public function scopeForParcours($query, $parcours)
+    {
+        return $query->where('parcours', $parcours);
     }
 }

@@ -1,10 +1,11 @@
-// src/pages/PublicEmploiDuTemps.jsx - Version avec export PDF et envoi email
+// src/pages/PublicEmploiDuTemps.jsx - Version avec affichage fusionné
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { publicService } from '../services/api';
+import { edtService, profService, salleService } from '../services/api';
 import { 
   Calendar, Clock, User, MapPin, Filter, ChevronLeft, ChevronRight,
-  School, GraduationCap, AlertCircle, LogIn, FileText, Mail, X
+  School, GraduationCap, AlertCircle, LogIn, FileText, Loader2,
+  DoorOpen, BookOpen
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -13,52 +14,93 @@ const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const NIVEAUX = ['L1', 'L2', 'L3', 'M1', 'M2'];
 const PARCOURS = ['Génie Logiciel', 'Réseaux & Télécoms', "Systèmes d'Information", 'Sécurité Informatique'];
 
+// ✅ Fonction pour formater en date locale
+function toLocalDateString(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// ✅ Fonction pour extraire la date d'une chaîne ISO
+function extractDateFromISO(isoDate) {
+  if (!isoDate) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  return isoDate.split('T')[0];
+}
+
+// ✅ Fonction pour obtenir le lundi de la semaine
+function getWeekStartDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day === 0) ? 6 : (day - 1);
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export default function PublicEmploiDuTemps() {
   const [courses, setCourses] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
+  const [profs, setProfs] = useState([]);
+  const [salles, setSalles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate(new Date()));
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
+  const [weekDays, setWeekDays] = useState([]);
   const [filters, setFilters] = useState({ niveau: '', parcours: '' });
   const [showFilters, setShowFilters] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [email, setEmail] = useState('');
-  const [emailSending, setEmailSending] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [emailError, setEmailError] = useState('');
   
   const edtRef = useRef(null);
 
-  function getWeekStartDate(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
-  }
+  // ✅ Mettre à jour les jours de la semaine
+  useEffect(() => {
+    if (currentWeekStart) {
+      updateWeekDays(currentWeekStart);
+    }
+  }, [currentWeekStart]);
 
-  function getWeekDates(startDate) {
-    const week = [];
+  // ✅ Filtrer les cours quand les données changent
+  useEffect(() => {
+    if (courses.length > 0 && currentWeekStart) {
+      filterCoursesByWeek();
+    }
+  }, [courses, currentWeekStart, filters]);
+
+  // ✅ Charger les données au démarrage
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  function updateWeekDays(date) {
+    if (!date) return;
+    const dates = [];
     for (let i = 0; i < 6; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      week.push({ 
-        date, 
-        dayName: JOURS[i], 
-        formattedDate: date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      const d = new Date(date);
+      d.setDate(date.getDate() + i);
+      dates.push({
+        date: d,
+        dayName: JOURS[i],
+        formattedDate: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        isoDate: toLocalDateString(d),
+        fullDate: d,
+        dayNumber: d.getDate(),
+        monthName: d.toLocaleDateString('fr-FR', { month: 'short' })
       });
     }
-    return week;
+    setWeekDays(dates);
   }
 
-  const weekDays = getWeekDates(currentWeekStart);
-
   function previousWeek() { 
+    if (!currentWeekStart) return;
     const newDate = new Date(currentWeekStart); 
     newDate.setDate(newDate.getDate() - 7); 
     setCurrentWeekStart(newDate); 
   }
   
   function nextWeek() { 
+    if (!currentWeekStart) return;
     const newDate = new Date(currentWeekStart); 
     newDate.setDate(newDate.getDate() + 7); 
     setCurrentWeekStart(newDate); 
@@ -72,57 +114,119 @@ export default function PublicEmploiDuTemps() {
     return weekDays.length ? `${weekDays[0].formattedDate} - ${weekDays[5].formattedDate}` : ''; 
   }
 
-  const loadData = useCallback(async () => {
+  // ✅ Fonction pour filtrer les cours par semaine (comme l'Admin)
+  function filterCoursesByWeek() {
+    if (!currentWeekStart) {
+      console.log('⚠️ currentWeekStart est null');
+      return;
+    }
+    
+    const weekStartStr = toLocalDateString(currentWeekStart);
+    
+    console.log('=== DEBUG PUBLIC EDT ===');
+    console.log('📅 Début de semaine:', weekStartStr);
+    console.log('📚 Nombre total de cours:', courses.length);
+    
+    // ✅ Filtrer par semaine en extrayant la date
+    let filtered = courses.filter(course => {
+      if (!course) return false;
+      if (!course.date_debut_semaine) return false;
+      
+      const courseDate = extractDateFromISO(course.date_debut_semaine);
+      const match = courseDate === weekStartStr;
+      
+      if (match) {
+        console.log('✅ Cours trouvé:', course.matiere, course.jour);
+      }
+      return match;
+    });
+    
+    console.log('📊 Cours filtrés pour cette semaine:', filtered.length);
+    
+    // Appliquer les filtres niveau et parcours
+    if (filters.niveau) {
+      filtered = filtered.filter(c => c.niveau === filters.niveau);
+    }
+    if (filters.parcours) {
+      filtered = filtered.filter(c => c.parcours === filters.parcours);
+    }
+    
+    console.log('📊 Cours après filtres:', filtered.length);
+    setFilteredCourses(filtered);
+  }
+
+  // ✅ Charger toutes les données (comme l'Admin)
+  const loadAllData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await publicService.getEmploi(filters.niveau, filters.parcours);
-      const data = Array.isArray(response.data) ? response.data : [];
-      setCourses(data);
-      setFilteredCourses(data);
+      await Promise.all([
+        loadCourses(),
+        loadProfs(),
+        loadSalles()
+      ]);
+      
+      console.log('✅ Toutes les données chargées');
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Erreur chargement:', error);
       setError('Impossible de charger les données.');
-      setCourses([]);
-      setFilteredCourses([]);
     } finally {
       setLoading(false);
     }
-  }, [filters.niveau, filters.parcours]);
-
-  const applyFilters = useCallback(() => {
-    const coursesArray = Array.isArray(courses) ? courses : [];
-    let filtered = [...coursesArray];
-    if (filters.niveau) {
-      filtered = filtered.filter(c => c && c.niveau === filters.niveau);
-    }
-    if (filters.parcours) {
-      filtered = filtered.filter(c => c && c.parcours === filters.parcours);
-    }
-    setFilteredCourses(filtered);
-  }, [courses, filters.niveau, filters.parcours]);
-
-  useEffect(() => { 
-    loadData(); 
-  }, [loadData]);
-
-  useEffect(() => { 
-    applyFilters(); 
-  }, [applyFilters]);
-
-  const groupByDay = () => {
-    const coursesArray = Array.isArray(filteredCourses) ? filteredCourses : [];
-    const grouped = {};
-    const weekStartStr = currentWeekStart.toISOString().split('T')[0];
-    JOURS.forEach(day => { 
-      grouped[day] = coursesArray.filter(c => 
-        c && c.jour === day && (!c.date_debut_semaine || c.date_debut_semaine === weekStartStr)
-      );
-    });
-    return grouped;
   };
 
-  // Fonction pour exporter en PDF
+  // ✅ Charger les cours depuis l'API (comme l'Admin)
+  const loadCourses = async () => {
+    try {
+      const res = await edtService.getAll();
+      console.log('📦 Cours chargés depuis API:', res.data?.length || 0, 'cours');
+      if (res.data && res.data.length > 0) {
+        console.log('📋 Exemple de cours:', res.data[0]);
+        const dates = res.data.map(c => extractDateFromISO(c.date_debut_semaine));
+        console.log('📋 Dates début semaine des cours (extraites):', [...new Set(dates)]);
+      }
+      setCourses(res.data || []);
+    } catch (error) {
+      console.error('Erreur chargement cours:', error);
+      throw error;
+    }
+  };
+
+  // ✅ Charger les professeurs
+  const loadProfs = async () => {
+    try {
+      const res = await profService.getAll();
+      setProfs(res.data || []);
+    } catch (error) {
+      console.error('Erreur chargement professeurs:', error);
+    }
+  };
+
+  // ✅ Charger les salles
+  const loadSalles = async () => {
+    try {
+      const res = await salleService.getAll();
+      setSalles(res.data || []);
+    } catch (error) {
+      console.error('Erreur chargement salles:', error);
+    }
+  };
+
+  const getProfName = (id) => {
+    const prof = profs.find(p => p.id === id);
+    return prof?.name || 'À confirmer';
+  };
+
+  const getSalleName = (id) => {
+    const salle = salles.find(s => s.id === id);
+    return salle?.nom || 'À confirmer';
+  };
+
+  const getCoursesByDay = (dayName) => {
+    return filteredCourses.filter(c => c.jour === dayName);
+  };
+
+  // Exporter en PDF
   const exportPDF = async () => {
     if (!edtRef.current) return;
     
@@ -130,7 +234,6 @@ export default function PublicEmploiDuTemps() {
       setLoading(true);
       const element = edtRef.current;
       
-      // Configuration pour une meilleure qualité
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -164,96 +267,14 @@ export default function PublicEmploiDuTemps() {
     }
   };
 
-  // Fonction pour valider l'email
-  const validateEmail = (email) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+  const resetFilters = () => {
+    setFilters({ niveau: '', parcours: '' });
   };
 
-  // Fonction pour envoyer par email
-  const sendEmail = async () => {
-    if (!email) {
-      setEmailError('Veuillez saisir votre adresse email');
-      return;
-    }
-    
-    if (!validateEmail(email)) {
-      setEmailError('Veuillez saisir une adresse email valide');
-      return;
-    }
-    
-    setEmailSending(true);
-    setEmailError('');
-    
-    try {
-      // Récupérer les données de l'emploi du temps
-      const groupedCourses = groupByDay();
-      const weekRange = getWeekRange();
-      
-      // Construire le contenu de l'email
-      let emailContent = `
-        <h2>Emploi du temps - ENI Fianarantsoa</h2>
-        <p><strong>Période :</strong> ${weekRange}</p>
-        ${filters.niveau ? `<p><strong>Niveau :</strong> ${filters.niveau}</p>` : ''}
-        ${filters.parcours ? `<p><strong>Parcours :</strong> ${filters.parcours}</p>` : ''}
-        <hr/>
-      `;
-      
-      let hasCourses = false;
-      JOURS.forEach(day => {
-        const dayCourses = groupedCourses[day] || [];
-        if (dayCourses.length > 0) {
-          hasCourses = true;
-          emailContent += `<h3>${day}</h3><ul>`;
-          dayCourses.forEach(course => {
-            emailContent += `
-              <li>
-                <strong>${course.matiere || 'Sans titre'}</strong><br/>
-                ⏰ ${course.heure_debut?.substring(0,5) || '--:--'} - ${course.heure_fin?.substring(0,5) || '--:--'}<br/>
-                👨‍🏫 ${course.prof || 'À confirmer'}<br/>
-                📍 ${course.salle || 'À confirmer'}<br/>
-                🏷️ ${course.niveau || 'N/A'} - ${course.parcours || 'N/A'}
-              </li>
-            `;
-          });
-          emailContent += `</ul>`;
-        }
-      });
-      
-      if (!hasCourses) {
-        emailContent += `<p><em>Aucun cours programmé pour cette semaine.</em></p>`;
-      }
-      
-      // Envoyer l'email via l'API
-      const response = await publicService.sendEmail({
-        to: email,
-        subject: `Emploi du temps - ENI Fianarantsoa (${weekRange})`,
-        html: emailContent
-      });
-      
-      setEmailSent(true);
-      setEmailSending(false);
-      
-      // Fermer le modal après 3 secondes
-      setTimeout(() => {
-        setShowEmailModal(false);
-        setEmail('');
-        setEmailSent(false);
-      }, 3000);
-      
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi de l\'email:', error);
-      setEmailError('Erreur lors de l\'envoi de l\'email. Veuillez réessayer.');
-      setEmailSending(false);
-    }
-  };
-
-  const groupedCourses = groupByDay();
-
-  if (loading && !emailSending) {
+  if (loading) {
     return (
       <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
+        <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} />
         <p style={styles.loadingText}>Chargement de l'emploi du temps...</p>
       </div>
     );
@@ -265,7 +286,7 @@ export default function PublicEmploiDuTemps() {
         <AlertCircle size={48} style={styles.errorIcon} />
         <h2 style={styles.errorTitle}>Erreur</h2>
         <p style={styles.errorMessage}>{error}</p>
-        <button onClick={() => loadData()} style={styles.retryButton}>Réessayer</button>
+        <button onClick={() => loadAllData()} style={styles.retryButton}>Réessayer</button>
       </div>
     );
   }
@@ -299,7 +320,7 @@ export default function PublicEmploiDuTemps() {
           <GraduationCap size={32} style={styles.headerIcon} />
           <div>
             <h2 style={styles.title}>Emploi du temps public</h2>
-            <p style={styles.subtitle}>Consultez les emplois du temps par niveau et parcours</p>
+            <p style={styles.subtitle}>Semaine du {getWeekRange()}</p>
           </div>
         </div>
 
@@ -318,15 +339,9 @@ export default function PublicEmploiDuTemps() {
             <span>{getWeekRange()}</span>
           </div>
           
-          {/* Nouveaux boutons */}
           <button onClick={exportPDF} style={styles.exportButton}>
             <FileText size={18} />
             Exporter PDF
-          </button>
-          
-          <button onClick={() => setShowEmailModal(true)} style={styles.emailButton}>
-            <Mail size={18} />
-            Envoyer par email
           </button>
           
           <button 
@@ -349,7 +364,7 @@ export default function PublicEmploiDuTemps() {
               onChange={(e) => setFilters({...filters, niveau: e.target.value})} 
               style={styles.select}
             >
-              <option value="">Tous niveaux</option>
+              <option value="">📚 Tous niveaux</option>
               {NIVEAUX.map(n => <option key={n}>{n}</option>)}
             </select>
             <select 
@@ -357,11 +372,11 @@ export default function PublicEmploiDuTemps() {
               onChange={(e) => setFilters({...filters, parcours: e.target.value})} 
               style={styles.select}
             >
-              <option value="">Tous parcours</option>
+              <option value="">🎓 Tous parcours</option>
               {PARCOURS.map(p => <option key={p}>{p}</option>)}
             </select>
             <button 
-              onClick={() => setFilters({ niveau: '', parcours: '' })} 
+              onClick={resetFilters} 
               style={styles.resetButton}
             >
               Réinitialiser
@@ -369,26 +384,30 @@ export default function PublicEmploiDuTemps() {
           </div>
         )}
 
-        {/* Contenu à exporter en PDF */}
+        {/* ✅ Affichage de l'emploi du temps - Version fusionnée */}
         <div ref={edtRef} style={styles.edtContent}>
-          <div style={styles.daysHeader}>
-            {weekDays.map((day, idx) => (
-              <div key={idx} style={styles.dayHeader}>
-                <div style={styles.dayName}>{day.dayName}</div>
-                <div style={styles.dayDate}>{day.formattedDate}</div>
-              </div>
-            ))}
-          </div>
-
+          {/* Grille des cours avec en-tête intégré */}
           <div style={styles.coursesGrid}>
             {weekDays.map((day, idx) => {
-              const dayCourses = groupedCourses[day.dayName] || [];
+              const dayCourses = getCoursesByDay(day.dayName);
+              const isToday = new Date().toDateString() === day.date.toDateString();
               return (
                 <div key={idx} style={styles.dayCard}>
-                  <div style={styles.dayCardHeader}>
-                    <span style={styles.dayCardTitle}>{day.dayName}</span>
-                    <span style={styles.courseCount}>{dayCourses.length}</span>
+                  {/* En-tête du jour intégré */}
+                  <div style={{
+                    ...styles.dayHeader,
+                    backgroundColor: isToday ? '#dbeafe' : '#f8fafc',
+                    borderBottom: isToday ? '2px solid #2563eb' : '1px solid #e2e8f0'
+                  }}>
+                    <div style={styles.dayName}>{day.dayName}</div>
+                    <div style={styles.dayDate}>{day.dayNumber} {day.monthName}</div>
+                    <div style={styles.dayCountBadge}>
+                      <span style={styles.dayCountNumber}>{dayCourses.length}</span>
+                      <span style={styles.dayCountLabel}>cours</span>
+                    </div>
                   </div>
+                  
+                  {/* Liste des cours */}
                   <div style={styles.courseList}>
                     {dayCourses.length === 0 ? (
                       <div style={styles.emptyState}>Aucun cours</div>
@@ -396,19 +415,31 @@ export default function PublicEmploiDuTemps() {
                       dayCourses.map((course, i) => (
                         <div key={i} style={styles.courseCard}>
                           <div style={styles.courseTitle}>{course.matiere || 'Sans titre'}</div>
-                          <div style={styles.courseInfo}>
-                            <Clock size={12} /> 
-                            {course.heure_debut?.substring(0,5) || '--:--'} - {course.heure_fin?.substring(0,5) || '--:--'}
+                          
+                          <div style={styles.courseInfoRow}>
+                            <Clock size={12} style={styles.infoIcon} />
+                            <span style={styles.courseInfoText}>
+                              {course.heure_debut?.substring(0,5) || '--:--'} - {course.heure_fin?.substring(0,5) || '--:--'}
+                            </span>
                           </div>
-                          <div style={styles.courseInfo}>
-                            <User size={12} /> {course.prof || 'À confirmer'}
+                          
+                          <div style={styles.courseInfoRow}>
+                            <User size={12} style={styles.infoIcon} />
+                            <span style={styles.courseInfoText}>{getProfName(course.user_id)}</span>
                           </div>
-                          <div style={styles.courseInfo}>
-                            <MapPin size={12} /> {course.salle || 'À confirmer'}
+                          
+                          <div style={styles.courseInfoRow}>
+                            <DoorOpen size={12} style={styles.infoIcon} />
+                            <span style={styles.courseInfoText}>{getSalleName(course.salle_id)}</span>
                           </div>
+                          
                           <div style={styles.badgeContainer}>
-                            <span style={styles.badge}>{course.niveau || 'N/A'}</span>
-                            <span style={styles.badge}>{course.parcours || 'N/A'}</span>
+                            <span style={styles.badge}>
+                              {course.niveau || 'N/A'}
+                            </span>
+                            <span style={styles.badge}>
+                              {course.parcours || 'N/A'}
+                            </span>
                           </div>
                         </div>
                       ))
@@ -420,82 +451,6 @@ export default function PublicEmploiDuTemps() {
           </div>
         </div>
       </div>
-
-      {/* Modal d'envoi par email */}
-      {showEmailModal && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Envoyer l'emploi du temps par email</h3>
-              <button 
-                onClick={() => {
-                  setShowEmailModal(false);
-                  setEmail('');
-                  setEmailError('');
-                  setEmailSent(false);
-                }} 
-                style={styles.modalClose}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div style={styles.modalBody}>
-              {emailSent ? (
-                <div style={styles.emailSuccess}>
-                  <Mail size={48} style={styles.successIcon} />
-                  <h4>Email envoyé avec succès !</h4>
-                  <p>L'emploi du temps a été envoyé à {email}</p>
-                </div>
-              ) : (
-                <>
-                  <p style={styles.modalDescription}>
-                    Entrez votre adresse email pour recevoir l'emploi du temps de la semaine 
-                    <strong> {getWeekRange()}</strong>
-                  </p>
-                  
-                  <div style={styles.emailInputGroup}>
-                    <label style={styles.emailLabel}>Adresse email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="exemple@email.com"
-                      style={styles.emailInput}
-                      disabled={emailSending}
-                    />
-                    {emailError && (
-                      <p style={styles.emailErrorText}>{emailError}</p>
-                    )}
-                  </div>
-                  
-                  <div style={styles.modalActions}>
-                    <button
-                      onClick={() => {
-                        setShowEmailModal(false);
-                        setEmail('');
-                        setEmailError('');
-                        setEmailSent(false);
-                      }}
-                      style={styles.modalCancelButton}
-                      disabled={emailSending}
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      onClick={sendEmail}
-                      style={styles.modalSendButton}
-                      disabled={emailSending}
-                    >
-                      {emailSending ? 'Envoi en cours...' : 'Envoyer'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <footer style={styles.footer}>
@@ -511,20 +466,25 @@ export default function PublicEmploiDuTemps() {
           </div>
         </div>
       </footer>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
 
-// Styles avec la charte graphique
+// Styles fusionnés
 const styles = {
-  // ... (gardez tous vos styles existants)
   container: {
     minHeight: '100vh',
     backgroundColor: '#f1f5f9',
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
   },
   
-  // Loading
   loadingContainer: {
     display: 'flex',
     flexDirection: 'column',
@@ -539,16 +499,7 @@ const styles = {
     fontSize: '16px',
     fontWeight: 500,
   },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid #e2e8f0',
-    borderTopColor: '#2563eb',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
   
-  // Error
   errorContainer: {
     display: 'flex',
     flexDirection: 'column',
@@ -586,7 +537,6 @@ const styles = {
     transition: 'all 0.2s ease',
   },
   
-  // Hero Banner
   heroBanner: {
     background: 'linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%)',
     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -625,7 +575,6 @@ const styles = {
     fontWeight: 400,
   },
   
-  // Login Button
   loginLink: {
     textDecoration: 'none',
   },
@@ -645,7 +594,6 @@ const styles = {
     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
   },
   
-  // EDT Section
   edtSection: {
     padding: '32px 24px',
     maxWidth: '1200px',
@@ -653,11 +601,11 @@ const styles = {
   },
   edtContent: {
     backgroundColor: 'white',
-    padding: '20px',
+    padding: '16px',
     borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
   },
   
-  // Header
   header: {
     display: 'flex',
     alignItems: 'center',
@@ -681,7 +629,6 @@ const styles = {
     fontWeight: 400,
   },
   
-  // Navigation
   navigationBar: {
     display: 'flex',
     alignItems: 'center',
@@ -728,8 +675,6 @@ const styles = {
     fontSize: '14px',
     fontWeight: 500,
   },
-  
-  // Nouveaux boutons
   exportButton: {
     display: 'flex',
     alignItems: 'center',
@@ -744,21 +689,6 @@ const styles = {
     fontSize: '14px',
     transition: 'all 0.2s ease',
   },
-  emailButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 20px',
-    backgroundColor: '#7c3aed',
-    color: 'white',
-    border: 'none',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontSize: '14px',
-    transition: 'all 0.2s ease',
-  },
-  
   filterButton: {
     display: 'flex',
     alignItems: 'center',
@@ -774,7 +704,6 @@ const styles = {
     color: '#475569',
   },
   
-  // Filters Panel
   filtersPanel: {
     display: 'flex',
     gap: '12px',
@@ -808,236 +737,120 @@ const styles = {
     transition: 'all 0.2s ease',
   },
   
-  // Days Header
-  daysHeader: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: '16px',
-    marginBottom: '16px',
-  },
-  dayHeader: {
-    textAlign: 'center',
-    padding: '12px',
-    backgroundColor: '#f8fafc',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0',
-  },
-  dayName: {
-    fontWeight: 600,
-    color: '#1e293b',
-    fontSize: '14px',
-  },
-  dayDate: {
-    fontSize: '12px',
-    color: '#64748b',
-    marginTop: '4px',
-  },
-  
-  // Courses Grid
+  // ✅ Grille fusionnée - une seule structure
   coursesGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: '16px',
+    gap: '8px',
   },
+  
+  // ✅ Jour entier (en-tête + cours)
   dayCard: {
     backgroundColor: 'white',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '1px solid #e2e8f0',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-    height: '550px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-    transition: 'all 0.2s ease',
+    height: '480px',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
   },
-  dayCardHeader: {
-    padding: '12px 16px',
-    backgroundColor: '#f8fafc',
+  
+  // ✅ En-tête du jour
+  dayHeader: {
+    padding: '10px 8px',
+    textAlign: 'center',
     borderBottom: '1px solid #e2e8f0',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  dayName: {
     fontWeight: 600,
+    fontSize: '13px',
     color: '#1e293b',
   },
-  dayCardTitle: {
-    fontSize: '14px',
-    fontWeight: 600,
+  dayDate: {
+    fontSize: '11px',
+    color: '#64748b',
+    marginTop: '2px',
   },
-  courseCount: {
+  dayCountBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '3px',
+    marginTop: '4px',
     padding: '2px 10px',
-    borderRadius: '20px',
-    backgroundColor: '#e2e8f0',
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#475569',
+    borderRadius: '16px',
+    backgroundColor: '#2563eb',
+    color: 'white',
+    fontSize: '10px',
+    fontWeight: 500,
   },
+  dayCountNumber: {
+    fontWeight: 700,
+  },
+  dayCountLabel: {
+    fontWeight: 400,
+  },
+  
+  // ✅ Liste des cours
   courseList: {
-    padding: '12px',
+    padding: '8px',
     flex: 1,
     overflowY: 'auto',
   },
   emptyState: {
-    textAlign: 'center',
-    padding: '40px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
     color: '#94a3b8',
-    fontSize: '14px',
+    fontSize: '12px',
   },
   
-  // Course Card
+  // ✅ Course card
   courseCard: {
-    padding: '12px',
-    marginBottom: '10px',
+    padding: '8px 10px',
+    marginBottom: '6px',
     backgroundColor: '#f8fafc',
-    borderRadius: '10px',
+    borderRadius: '6px',
     border: '1px solid #e2e8f0',
-    transition: 'all 0.2s ease',
   },
   courseTitle: {
     fontWeight: 600,
-    marginBottom: '6px',
-    fontSize: '14px',
+    marginBottom: '4px',
+    fontSize: '12px',
     color: '#1e293b',
   },
-  courseInfo: {
-    fontSize: '12px',
-    color: '#64748b',
+  courseInfoRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
-    marginBottom: '4px',
+    marginBottom: '2px',
+  },
+  infoIcon: {
+    color: '#64748b',
+    flexShrink: 0,
+  },
+  courseInfoText: {
+    fontSize: '10px',
+    color: '#64748b',
   },
   badgeContainer: {
     display: 'flex',
-    gap: '6px',
-    marginTop: '8px',
+    gap: '4px',
+    marginTop: '4px',
     flexWrap: 'wrap',
   },
   badge: {
-    fontSize: '10px',
-    padding: '2px 10px',
+    fontSize: '9px',
+    padding: '1px 6px',
     backgroundColor: '#e2e8f0',
-    borderRadius: '12px',
+    borderRadius: '8px',
     color: '#475569',
     fontWeight: 500,
   },
   
-  // Modal
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    padding: '20px',
-    backdropFilter: 'blur(4px)',
-  },
-  modal: {
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    maxWidth: '500px',
-    width: '100%',
-    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-    animation: 'slideIn 0.3s ease-out',
-  },
-  modalHeader: {
-    padding: '20px 24px',
-    borderBottom: '1px solid #e2e8f0',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    margin: 0,
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#1e293b',
-  },
-  modalClose: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#64748b',
-    padding: '4px',
-    borderRadius: '8px',
-    transition: 'all 0.2s ease',
-  },
-  modalBody: {
-    padding: '24px',
-  },
-  modalDescription: {
-    color: '#475569',
-    fontSize: '14px',
-    marginBottom: '20px',
-    lineHeight: '1.6',
-  },
-  emailInputGroup: {
-    marginBottom: '20px',
-  },
-  emailLabel: {
-    display: 'block',
-    marginBottom: '6px',
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#1e293b',
-  },
-  emailInput: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '14px',
-    color: '#1e293b',
-    transition: 'all 0.2s ease',
-    boxSizing: 'border-box',
-  },
-  emailErrorText: {
-    color: '#ef4444',
-    fontSize: '13px',
-    marginTop: '6px',
-  },
-  modalActions: {
-    display: 'flex',
-    gap: '12px',
-    justifyContent: 'flex-end',
-  },
-  modalCancelButton: {
-    padding: '10px 24px',
-    backgroundColor: '#f1f5f9',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontSize: '14px',
-    transition: 'all 0.2s ease',
-  },
-  modalSendButton: {
-    padding: '10px 24px',
-    backgroundColor: '#7c3aed',
-    color: 'white',
-    border: 'none',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontSize: '14px',
-    transition: 'all 0.2s ease',
-  },
-  emailSuccess: {
-    textAlign: 'center',
-    padding: '20px 0',
-  },
-  successIcon: {
-    color: '#059669',
-    marginBottom: '16px',
-  },
-  
-  // Footer
   footer: {
     backgroundColor: '#1e293b',
     color: '#94a3b8',
@@ -1066,72 +879,3 @@ const styles = {
     color: '#94a3b8',
   },
 };
-
-// Animation keyframes
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = `
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-20px) scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-    
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    
-    button:active {
-      transform: translateY(0px);
-    }
-    
-    .day-card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      transform: translateY(-2px);
-    }
-    
-    .course-card:hover {
-      background-color: white;
-      border-color: #2563eb;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
-    }
-    
-    .modal-close:hover {
-      background-color: #f1f5f9;
-    }
-    
-    .email-input:focus {
-      outline: none;
-      border-color: #7c3aed;
-      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
-    }
-    
-    @media (max-width: 1024px) {
-      .days-header, .courses-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-    
-    @media (max-width: 640px) {
-      .days-header, .courses-grid {
-        grid-template-columns: 1fr;
-      }
-      
-      .day-card {
-        height: auto;
-        max-height: 400px;
-      }
-    }
-  `;
-  document.head.appendChild(styleSheet);
-}

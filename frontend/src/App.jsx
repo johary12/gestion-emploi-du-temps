@@ -1,5 +1,7 @@
+// src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Layouts
 import NavbarAdmin from './components/NavbarAdmin';
@@ -43,8 +45,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// ✅ Plus de <Router> ni <AuthProvider> ici — ils sont dans main.jsx
-function App() {
+// ✅ AppContent avec les routes
+function AppContent() {
   return (
     <Routes>
       {/* Routes publiques */}
@@ -117,6 +119,15 @@ function App() {
   );
 }
 
+// ✅ App wrapper avec ThemeProvider
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
 const styles = {
   loading: {
     display: 'flex',
@@ -124,7 +135,7 @@ const styles = {
     alignItems: 'center',
     height: '100vh',
     fontSize: '18px',
-    color: '#667eea',
+    color: 'var(--text-primary, #1e293b)',
   },
 };
 

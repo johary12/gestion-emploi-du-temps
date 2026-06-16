@@ -1,15 +1,17 @@
-// src/pagesAdmin/AdminDisponibilites.jsx - Version avec charte graphique
+// src/pagesAdmin/AdminDisponibilites.jsx - Version avec mode sombre
 import { useState, useEffect } from 'react';
 import { disponibiliteService, profService } from '../services/api';
 import { 
   Plus, Trash2, Search, User, Clock, AlertCircle, CheckCircle,
   Calendar, X, Filter, Users, Edit2, ChevronLeft, ChevronRight,
-  Info
+  Info, AlertTriangle, Trash2 as TrashIcon
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 export default function AdminDisponibilites() {
+  const { theme } = useTheme();
   const [dispos, setDispos] = useState([]);
   const [profs, setProfs] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -21,6 +23,11 @@ export default function AdminDisponibilites() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // États pour le modal de suppression
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [deleteInfo, setDeleteInfo] = useState('');
 
   useEffect(() => { loadProfs(); }, []);
 
@@ -90,18 +97,27 @@ export default function AdminDisponibilites() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('⚠️ Êtes-vous sûr de vouloir supprimer cette disponibilité ?')) {
-      setLoading(true);
-      try { 
-        await disponibiliteService.delete(id); 
-        await loadDispos(selectedProf); 
-        showNotification('success', '✅ Disponibilité supprimée avec succès'); 
-      } catch (error) { 
-        showNotification('error', 'Erreur lors de la suppression'); 
-      } finally { 
-        setLoading(false); 
-      }
+  // Ouvrir le modal de suppression
+  const openDeleteModal = (id, jour, heure_debut, heure_fin) => {
+    setDeleteId(id);
+    setDeleteInfo(`${jour} - ${heure_debut?.substring(0,5)} à ${heure_fin?.substring(0,5)}`);
+    setShowDeleteModal(true);
+  };
+
+  // Confirmer la suppression
+  const confirmDelete = async () => {
+    setLoading(true);
+    try { 
+      await disponibiliteService.delete(deleteId); 
+      await loadDispos(selectedProf); 
+      showNotification('success', '✅ Disponibilité supprimée avec succès'); 
+      setShowDeleteModal(false);
+      setDeleteId(null);
+      setDeleteInfo('');
+    } catch (error) { 
+      showNotification('error', 'Erreur lors de la suppression'); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
@@ -156,7 +172,11 @@ export default function AdminDisponibilites() {
   };
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      backgroundColor: 'var(--bg-primary, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
+    }}>
       {/* Notification */}
       {notification.show && (
         <div style={{
@@ -171,8 +191,14 @@ export default function AdminDisponibilites() {
       {/* En-tête */}
       <div style={styles.headerSection}>
         <div>
-          <h1 style={styles.pageTitle}>⏰ Gestion des disponibilités</h1>
-          <p style={styles.pageSubtitle}>Gérez les disponibilités des professeurs</p>
+          <h1 style={{
+            ...styles.pageTitle,
+            color: 'var(--text-primary, #1e293b)',
+          }}>⏰ Gestion des disponibilités</h1>
+          <p style={{
+            ...styles.pageSubtitle,
+            color: 'var(--text-secondary, #64748b)',
+          }}>Gérez les disponibilités des professeurs</p>
         </div>
         <button 
           onClick={openModal} 
@@ -191,12 +217,21 @@ export default function AdminDisponibilites() {
 
       {/* Sélection du professeur */}
       <div style={styles.filterBar}>
-        <div style={styles.filterBarContent}>
+        <div style={{
+          ...styles.filterBarContent,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+        }}>
           <User size={18} style={styles.filterIcon} />
           <select 
             value={selectedProf} 
             onChange={(e) => handleProfChange(e.target.value)} 
-            style={styles.select}
+            style={{
+              ...styles.select,
+              backgroundColor: 'var(--bg-input, #ffffff)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+              color: 'var(--text-primary, #1e293b)',
+            }}
           >
             <option value="">Sélectionner un professeur</option>
             {profs.map(p => (
@@ -206,7 +241,11 @@ export default function AdminDisponibilites() {
             ))}
           </select>
           {selectedProf && (
-            <span style={styles.selectedProfName}>
+            <span style={{
+              ...styles.selectedProfName,
+              backgroundColor: 'var(--bg-input, #eff6ff)',
+              color: '#2563eb',
+            }}>
               <User size={14} />
               {selectedProfName}
             </span>
@@ -218,46 +257,95 @@ export default function AdminDisponibilites() {
         <>
           {/* Statistiques */}
           <div style={styles.statsContainer}>
-            <div style={styles.statCard}>
+            <div style={{
+              ...styles.statCard,
+              backgroundColor: 'var(--bg-card, #ffffff)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+              boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+            }}>
               <Clock size={24} style={styles.statIcon} />
               <div>
-                <div style={styles.statValue}>{totalDispos}</div>
-                <div style={styles.statLabel}>Disponibilités totales</div>
+                <div style={{
+                  ...styles.statValue,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>{totalDispos}</div>
+                <div style={{
+                  ...styles.statLabel,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Disponibilités totales</div>
               </div>
             </div>
-            <div style={styles.statCard}>
+            <div style={{
+              ...styles.statCard,
+              backgroundColor: 'var(--bg-card, #ffffff)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+              boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+            }}>
               <Calendar size={24} style={styles.statIcon} />
               <div>
-                <div style={styles.statValue}>
+                <div style={{
+                  ...styles.statValue,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   {Object.values(jourStats).filter(v => v > 0).length}
                 </div>
-                <div style={styles.statLabel}>Jours couverts</div>
+                <div style={{
+                  ...styles.statLabel,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Jours couverts</div>
               </div>
             </div>
-            <div style={styles.statCard}>
+            <div style={{
+              ...styles.statCard,
+              backgroundColor: 'var(--bg-card, #ffffff)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+              boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+            }}>
               <Users size={24} style={styles.statIcon} />
               <div>
-                <div style={styles.statValue}>
+                <div style={{
+                  ...styles.statValue,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   {profs.find(p => p.id === parseInt(selectedProf))?.name || '—'}
                 </div>
-                <div style={styles.statLabel}>Professeur sélectionné</div>
+                <div style={{
+                  ...styles.statLabel,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Professeur sélectionné</div>
               </div>
             </div>
           </div>
 
           {/* Distribution par jour */}
-          <div style={styles.distributionContainer}>
+          <div style={{
+            ...styles.distributionContainer,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+          }}>
             <div style={styles.distributionHeader}>
-              <span style={styles.distributionTitle}>Distribution par jour</span>
+              <span style={{
+                ...styles.distributionTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Distribution par jour</span>
             </div>
             <div style={styles.distributionGrid}>
               {JOURS.map(jour => (
                 <div key={jour} style={styles.distributionItem}>
-                  <span style={styles.distributionDay}>
+                  <span style={{
+                    ...styles.distributionDay,
+                    color: 'var(--text-secondary, #475569)',
+                  }}>
                     {getJourIcon(jour)} {jour}
                   </span>
-                  <span style={styles.distributionCount}>{jourStats[jour] || 0}</span>
-                  <div style={styles.distributionBar}>
+                  <span style={{
+                    ...styles.distributionCount,
+                    color: 'var(--text-primary, #2563eb)',
+                  }}>{jourStats[jour] || 0}</span>
+                  <div style={{
+                    ...styles.distributionBar,
+                    backgroundColor: 'var(--bg-input, #e2e8f0)',
+                  }}>
                     <div style={{
                       ...styles.distributionBarFill,
                       width: `${totalDispos > 0 ? (jourStats[jour] / totalDispos) * 100 : 0}%`,
@@ -271,7 +359,12 @@ export default function AdminDisponibilites() {
 
           {/* Barre de recherche */}
           <div style={styles.searchSection}>
-            <div style={styles.searchBar}>
+            <div style={{
+              ...styles.searchBar,
+              backgroundColor: 'var(--bg-card, #ffffff)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+              boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+            }}>
               <Search size={18} style={styles.searchIcon} />
               <input 
                 type="text" 
@@ -281,10 +374,17 @@ export default function AdminDisponibilites() {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }} 
-                style={styles.searchInput} 
+                style={{
+                  ...styles.searchInput,
+                  backgroundColor: 'transparent',
+                  color: 'var(--text-primary, #1e293b)',
+                }} 
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm('')} style={styles.clearSearch}>
+                <button onClick={() => setSearchTerm('')} style={{
+                  ...styles.clearSearch,
+                  color: 'var(--text-muted, #94a3b8)',
+                }}>
                   <X size={16} />
                 </button>
               )}
@@ -292,27 +392,69 @@ export default function AdminDisponibilites() {
           </div>
 
           {/* Tableau des disponibilités */}
-          <div style={styles.tableContainer}>
-            <div style={styles.tableHeader}>
-              <span style={styles.tableTitle}>Liste des disponibilités</span>
-              <span style={styles.tableCount}>{filteredDispos.length} disponibilité(s)</span>
+          <div style={{
+            ...styles.tableContainer,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+            boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+          }}>
+            <div style={{
+              ...styles.tableHeader,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              borderBottom: '1px solid var(--border-color, #e2e8f0)',
+            }}>
+              <span style={{
+                ...styles.tableTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Liste des disponibilités</span>
+              <span style={{
+                ...styles.tableCount,
+                backgroundColor: 'var(--bg-card, #ffffff)',
+                borderColor: 'var(--border-color, #e2e8f0)',
+                color: 'var(--text-secondary, #64748b)',
+              }}>{filteredDispos.length} disponibilité(s)</span>
             </div>
             
             {loading ? (
               <div style={styles.loadingContainer}>
                 <div style={styles.spinner} />
-                <p>Chargement des disponibilités...</p>
+                <p style={{ color: 'var(--text-secondary, #64748b)' }}>Chargement des disponibilités...</p>
               </div>
             ) : (
               <>
                 <table style={styles.table}>
                   <thead>
                     <tr>
-                      <th style={styles.th}>Jour</th>
-                      <th style={styles.th}>Heure début</th>
-                      <th style={styles.th}>Heure fin</th>
-                      <th style={styles.th}>Durée</th>
-                      <th style={styles.th}>Actions</th>
+                      <th style={{
+                        ...styles.th,
+                        color: 'var(--text-secondary, #64748b)',
+                        borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                        backgroundColor: 'var(--bg-input, #fafafa)',
+                      }}>Jour</th>
+                      <th style={{
+                        ...styles.th,
+                        color: 'var(--text-secondary, #64748b)',
+                        borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                        backgroundColor: 'var(--bg-input, #fafafa)',
+                      }}>Heure début</th>
+                      <th style={{
+                        ...styles.th,
+                        color: 'var(--text-secondary, #64748b)',
+                        borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                        backgroundColor: 'var(--bg-input, #fafafa)',
+                      }}>Heure fin</th>
+                      <th style={{
+                        ...styles.th,
+                        color: 'var(--text-secondary, #64748b)',
+                        borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                        backgroundColor: 'var(--bg-input, #fafafa)',
+                      }}>Durée</th>
+                      <th style={{
+                        ...styles.th,
+                        color: 'var(--text-secondary, #64748b)',
+                        borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                        backgroundColor: 'var(--bg-input, #fafafa)',
+                      }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -321,8 +463,14 @@ export default function AdminDisponibilites() {
                         <td colSpan="5" style={styles.emptyRow}>
                           <div style={styles.emptyState}>
                             <Clock size={48} style={styles.emptyIcon} />
-                            <p style={styles.emptyText}>Aucune disponibilité trouvée</p>
-                            <p style={styles.emptySubtext}>
+                            <p style={{
+                              ...styles.emptyText,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>Aucune disponibilité trouvée</p>
+                            <p style={{
+                              ...styles.emptySubtext,
+                              color: 'var(--text-muted, #94a3b8)',
+                            }}>
                               {searchTerm ? 'Aucune disponibilité ne correspond à votre recherche' : 'Ajoutez une disponibilité en cliquant sur "Ajouter"'}
                             </p>
                           </div>
@@ -332,7 +480,6 @@ export default function AdminDisponibilites() {
                       paginatedDispos.map(d => {
                         const start = d.heure_debut?.substring(0,5) || '--:--';
                         const end = d.heure_fin?.substring(0,5) || '--:--';
-                        // Calculer la durée en heures
                         const startMinutes = parseInt(start.split(':')[0]) * 60 + parseInt(start.split(':')[1]);
                         const endMinutes = parseInt(end.split(':')[0]) * 60 + parseInt(end.split(':')[1]);
                         const duration = endMinutes - startMinutes;
@@ -343,29 +490,63 @@ export default function AdminDisponibilites() {
                           : `${durationMinutes}min`;
 
                         return (
-                          <tr key={d.id} style={styles.tr}>
-                            <td style={styles.td}>
+                          <tr key={d.id} style={{
+                            ...styles.tr,
+                            borderBottom: '1px solid var(--border-color, #f1f5f9)',
+                          }}>
+                            <td style={{
+                              ...styles.td,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>
                               <div style={styles.jourContainer}>
                                 <span style={styles.jourEmoji}>{getJourIcon(d.jour)}</span>
                                 <span style={styles.jourName}>{d.jour}</span>
                               </div>
                             </td>
-                            <td style={styles.td}>
-                              <span style={styles.heureBadge}>{start}</span>
+                            <td style={{
+                              ...styles.td,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>
+                              <span style={{
+                                ...styles.heureBadge,
+                                backgroundColor: 'var(--bg-input, #f1f5f9)',
+                                color: 'var(--text-secondary, #475569)',
+                              }}>{start}</span>
                             </td>
-                            <td style={styles.td}>
-                              <span style={styles.heureBadge}>{end}</span>
+                            <td style={{
+                              ...styles.td,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>
+                              <span style={{
+                                ...styles.heureBadge,
+                                backgroundColor: 'var(--bg-input, #f1f5f9)',
+                                color: 'var(--text-secondary, #475569)',
+                              }}>{end}</span>
                             </td>
-                            <td style={styles.td}>
-                              <span style={styles.dureeBadge}>
+                            <td style={{
+                              ...styles.td,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>
+                              <span style={{
+                                ...styles.dureeBadge,
+                                backgroundColor: 'var(--bg-input, #eff6ff)',
+                                color: '#2563eb',
+                              }}>
                                 <Clock size={12} />
                                 {durationText}
                               </span>
                             </td>
-                            <td style={styles.td}>
+                            <td style={{
+                              ...styles.td,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>
                               <button 
-                                onClick={() => handleDelete(d.id)} 
-                                style={styles.deleteBtn}
+                                onClick={() => openDeleteModal(d.id, d.jour, d.heure_debut, d.heure_fin)} 
+                                style={{
+                                  ...styles.deleteBtn,
+                                  backgroundColor: 'var(--bg-input, #fef2f2)',
+                                  color: '#dc2626',
+                                }}
                                 title="Supprimer"
                               >
                                 <Trash2 size={16} />
@@ -380,21 +561,37 @@ export default function AdminDisponibilites() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div style={styles.pagination}>
+                  <div style={{
+                    ...styles.pagination,
+                    borderTop: '1px solid var(--border-color, #e2e8f0)',
+                  }}>
                     <button 
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      style={styles.paginationButton}
+                      style={{
+                        ...styles.paginationButton,
+                        backgroundColor: 'var(--bg-card, #ffffff)',
+                        borderColor: 'var(--border-color, #e2e8f0)',
+                        color: 'var(--text-secondary, #475569)',
+                      }}
                     >
                       <ChevronLeft size={16} />
                     </button>
-                    <span style={styles.paginationInfo}>
+                    <span style={{
+                      ...styles.paginationInfo,
+                      color: 'var(--text-secondary, #64748b)',
+                    }}>
                       Page {currentPage} sur {totalPages}
                     </span>
                     <button 
                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      style={styles.paginationButton}
+                      style={{
+                        ...styles.paginationButton,
+                        backgroundColor: 'var(--bg-card, #ffffff)',
+                        borderColor: 'var(--border-color, #e2e8f0)',
+                        color: 'var(--text-secondary, #475569)',
+                      }}
                     >
                       <ChevronRight size={16} />
                     </button>
@@ -406,29 +603,47 @@ export default function AdminDisponibilites() {
         </>
       )}
 
-      {/* Modal d'ajout */}
+      {/* Modal d'ajout avec étoiles rouges */}
       {showModal && (
         <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>➕ Ajouter une disponibilité</h3>
-              <button onClick={() => setShowModal(false)} style={styles.modalClose}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            boxShadow: '0 20px 60px var(--shadow-color, rgba(0,0,0,0.2))',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              ...styles.modalHeader,
+              borderBottom: '1px solid var(--border-color, #e2e8f0)',
+            }}>
+              <h3 style={{
+                ...styles.modalTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>➕ Ajouter une disponibilité</h3>
+              <button onClick={() => setShowModal(false)} style={{
+                ...styles.modalClose,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
                 <X size={20} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <User size={16} style={styles.formIcon} />
-                  Professeur *
+                  Professeur <span style={styles.requiredStar}>*</span>
                 </label>
                 <select 
                   value={form.user_id} 
                   onChange={e => setForm({...form, user_id: e.target.value})} 
                   style={{
                     ...styles.input,
-                    borderColor: errors.user_id ? '#ef4444' : '#e2e8f0'
+                    backgroundColor: 'var(--bg-input, #f8fafc)',
+                    borderColor: errors.user_id ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                    color: 'var(--text-primary, #1e293b)',
                   }}
                 >
                   <option value="">Choisir un professeur</option>
@@ -440,16 +655,21 @@ export default function AdminDisponibilites() {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <Calendar size={16} style={styles.formIcon} />
-                  Jour *
+                  Jour <span style={styles.requiredStar}>*</span>
                 </label>
                 <select 
                   value={form.jour} 
                   onChange={e => setForm({...form, jour: e.target.value})} 
                   style={{
                     ...styles.input,
-                    borderColor: errors.jour ? '#ef4444' : '#e2e8f0'
+                    backgroundColor: 'var(--bg-input, #f8fafc)',
+                    borderColor: errors.jour ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                    color: 'var(--text-primary, #1e293b)',
                   }}
                 >
                   {JOURS.map(j => (
@@ -460,33 +680,49 @@ export default function AdminDisponibilites() {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <Clock size={16} style={styles.formIcon} />
-                  Horaires *
+                  Horaires <span style={styles.requiredStar}>*</span>
                 </label>
                 <div style={styles.timeContainer}>
                   <div style={styles.timeField}>
-                    <span style={styles.timeLabel}>Début</span>
+                    <span style={{
+                      ...styles.timeLabel,
+                      color: 'var(--text-secondary, #64748b)',
+                    }}>Début</span>
                     <input 
                       type="time" 
                       value={form.heure_debut} 
                       onChange={e => setForm({...form, heure_debut: e.target.value})} 
                       style={{
                         ...styles.input,
-                        borderColor: errors.heure_debut ? '#ef4444' : '#e2e8f0'
+                        backgroundColor: 'var(--bg-input, #f8fafc)',
+                        borderColor: errors.heure_debut ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                        color: 'var(--text-primary, #1e293b)',
                       }} 
                     />
                   </div>
-                  <span style={styles.timeSeparator}>à</span>
+                  <span style={{
+                    ...styles.timeSeparator,
+                    color: 'var(--text-secondary, #64748b)',
+                  }}>à</span>
                   <div style={styles.timeField}>
-                    <span style={styles.timeLabel}>Fin</span>
+                    <span style={{
+                      ...styles.timeLabel,
+                      color: 'var(--text-secondary, #64748b)',
+                    }}>Fin</span>
                     <input 
                       type="time" 
                       value={form.heure_fin} 
                       onChange={e => setForm({...form, heure_fin: e.target.value})} 
                       style={{
                         ...styles.input,
-                        borderColor: errors.heure_fin ? '#ef4444' : '#e2e8f0'
+                        backgroundColor: 'var(--bg-input, #f8fafc)',
+                        borderColor: errors.heure_fin ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                        color: 'var(--text-primary, #1e293b)',
                       }} 
                     />
                   </div>
@@ -495,14 +731,27 @@ export default function AdminDisponibilites() {
                 {errors.heure_fin && <div style={styles.fieldError}>{errors.heure_fin}</div>}
               </div>
 
-              <div style={styles.infoBox}>
+              <div style={{
+                ...styles.infoBox,
+                backgroundColor: 'var(--bg-input, #f0fdf4)',
+                borderColor: 'var(--border-color, #bbf7d0)',
+                color: 'var(--text-primary, #166534)',
+              }}>
                 <Info size={16} />
                 <span>La disponibilité sera active pour le professeur sélectionné</span>
               </div>
             </div>
 
-            <div style={styles.modalFooter}>
-              <button onClick={() => setShowModal(false)} style={styles.cancelBtn}>
+            <div style={{
+              ...styles.modalFooter,
+              borderTop: '1px solid var(--border-color, #e2e8f0)',
+            }}>
+              <button onClick={() => setShowModal(false)} style={{
+                ...styles.cancelBtn,
+                backgroundColor: 'var(--bg-card, #ffffff)',
+                borderColor: 'var(--border-color, #e2e8f0)',
+                color: 'var(--text-secondary, #475569)',
+              }}>
                 Annuler
               </button>
               <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
@@ -519,18 +768,91 @@ export default function AdminDisponibilites() {
           </div>
         </div>
       )}
+
+      {/* Modal de suppression personnalisé */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            boxShadow: '0 20px 60px var(--shadow-color, rgba(0,0,0,0.2))',
+            maxWidth: '420px',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={styles.deleteModalHeader}>
+              <div style={styles.deleteIconContainer}>
+                <AlertTriangle size={32} style={styles.deleteIcon} />
+              </div>
+              <button onClick={() => setShowDeleteModal(false)} style={{
+                ...styles.modalClose,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={styles.deleteModalBody}>
+              <h3 style={{
+                ...styles.deleteModalTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Confirmer la suppression</h3>
+              <p style={{
+                ...styles.deleteModalText,
+                color: 'var(--text-secondary, #475569)',
+              }}>
+                Êtes-vous sûr de vouloir supprimer la disponibilité <strong style={{ color: 'var(--text-primary, #1e293b)' }}>"{deleteInfo}"</strong> ?
+              </p>
+              <p style={{
+                ...styles.deleteModalSubtext,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
+                Cette action est irréversible et supprimera définitivement cette disponibilité.
+              </p>
+            </div>
+
+            <div style={styles.deleteModalFooter}>
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                style={{
+                  ...styles.deleteCancelBtn,
+                  backgroundColor: 'var(--bg-card, #ffffff)',
+                  borderColor: 'var(--border-color, #e2e8f0)',
+                  color: 'var(--text-secondary, #475569)',
+                }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={confirmDelete} 
+                style={styles.deleteConfirmBtn}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div style={styles.spinnerSmall} />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <TrashIcon size={16} />
+                    Supprimer
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Styles avec charte graphique
+// Styles avec charte graphique et variables CSS
 const styles = {
   container: {
     padding: '24px 32px',
     maxWidth: '1200px',
     margin: '0 auto',
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-    backgroundColor: '#f8fafc',
     minHeight: '100vh',
   },
 
@@ -566,13 +888,11 @@ const styles = {
   pageTitle: {
     fontSize: '28px',
     fontWeight: 700,
-    color: '#1e293b',
     margin: 0,
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
   pageSubtitle: {
     fontSize: '14px',
-    color: '#64748b',
     margin: '4px 0 0',
   },
   addButton: {
@@ -600,7 +920,6 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
     padding: '16px 20px',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     flexWrap: 'wrap',
@@ -613,8 +932,6 @@ const styles = {
     border: '1px solid #e2e8f0',
     borderRadius: '8px',
     fontSize: '14px',
-    backgroundColor: 'white',
-    color: '#1e293b',
     minWidth: '280px',
     outline: 'none',
     transition: 'all 0.2s ease',
@@ -624,8 +941,6 @@ const styles = {
     alignItems: 'center',
     gap: '6px',
     padding: '6px 14px',
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
     borderRadius: '20px',
     fontSize: '13px',
     fontWeight: 500,
@@ -643,7 +958,6 @@ const styles = {
     alignItems: 'center',
     gap: '16px',
     padding: '16px 20px',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -654,17 +968,14 @@ const styles = {
   statValue: {
     fontSize: '24px',
     fontWeight: 700,
-    color: '#1e293b',
   },
   statLabel: {
     fontSize: '13px',
-    color: '#64748b',
     fontWeight: 500,
   },
 
   // Distribution
   distributionContainer: {
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     padding: '16px 20px',
@@ -676,7 +987,6 @@ const styles = {
   distributionTitle: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#1e293b',
   },
   distributionGrid: {
     display: 'grid',
@@ -691,17 +1001,14 @@ const styles = {
   distributionDay: {
     fontSize: '13px',
     fontWeight: 500,
-    color: '#475569',
   },
   distributionCount: {
     fontSize: '12px',
     fontWeight: 600,
-    color: '#2563eb',
   },
   distributionBar: {
     width: '100%',
     height: '4px',
-    backgroundColor: '#e2e8f0',
     borderRadius: '2px',
     overflow: 'hidden',
   },
@@ -717,7 +1024,6 @@ const styles = {
   },
   searchBar: {
     position: 'relative',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -736,8 +1042,6 @@ const styles = {
     borderRadius: '12px',
     fontSize: '14px',
     outline: 'none',
-    backgroundColor: 'transparent',
-    color: '#1e293b',
   },
   clearSearch: {
     position: 'absolute',
@@ -747,7 +1051,6 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#94a3b8',
     padding: '4px',
     borderRadius: '50%',
     transition: 'all 0.2s ease',
@@ -755,7 +1058,6 @@ const styles = {
 
   // Table
   tableContainer: {
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     overflow: 'hidden',
@@ -766,19 +1068,15 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '16px 20px',
-    backgroundColor: '#f8fafc',
     borderBottom: '1px solid #e2e8f0',
   },
   tableTitle: {
     fontSize: '16px',
     fontWeight: 600,
-    color: '#1e293b',
   },
   tableCount: {
     fontSize: '13px',
-    color: '#64748b',
     padding: '4px 12px',
-    backgroundColor: 'white',
     borderRadius: '20px',
     border: '1px solid #e2e8f0',
   },
@@ -791,11 +1089,9 @@ const styles = {
     padding: '12px 20px',
     fontSize: '12px',
     fontWeight: 600,
-    color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     borderBottom: '1px solid #e2e8f0',
-    backgroundColor: '#fafafa',
   },
   tr: {
     transition: 'all 0.2s ease',
@@ -804,7 +1100,6 @@ const styles = {
   td: {
     padding: '12px 20px',
     fontSize: '14px',
-    color: '#1e293b',
     verticalAlign: 'middle',
   },
 
@@ -825,19 +1120,15 @@ const styles = {
   heureBadge: {
     display: 'inline-block',
     padding: '4px 12px',
-    backgroundColor: '#f1f5f9',
     borderRadius: '6px',
     fontSize: '13px',
     fontWeight: 500,
-    color: '#475569',
   },
   dureeBadge: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '4px',
     padding: '4px 12px',
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
@@ -846,8 +1137,6 @@ const styles = {
   // Actions
   deleteBtn: {
     padding: '6px 10px',
-    backgroundColor: '#fef2f2',
-    color: '#dc2626',
     border: 'none',
     borderRadius: '8px',
     cursor: 'pointer',
@@ -871,12 +1160,10 @@ const styles = {
   emptyText: {
     fontSize: '18px',
     fontWeight: 600,
-    color: '#1e293b',
     marginBottom: '8px',
   },
   emptySubtext: {
     fontSize: '14px',
-    color: '#94a3b8',
   },
 
   // Pagination
@@ -890,18 +1177,15 @@ const styles = {
   },
   paginationButton: {
     padding: '6px 12px',
-    backgroundColor: 'white',
     border: '1px solid #e2e8f0',
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     display: 'flex',
     alignItems: 'center',
-    color: '#475569',
   },
   paginationInfo: {
     fontSize: '14px',
-    color: '#64748b',
   },
 
   // Loading
@@ -943,7 +1227,6 @@ const styles = {
     padding: '20px',
   },
   modalContent: {
-    backgroundColor: 'white',
     borderRadius: '16px',
     width: '520px',
     maxWidth: '100%',
@@ -962,7 +1245,6 @@ const styles = {
   modalTitle: {
     fontSize: '20px',
     fontWeight: 600,
-    color: '#1e293b',
     margin: 0,
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
@@ -970,7 +1252,6 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#94a3b8',
     padding: '4px',
     borderRadius: '8px',
     transition: 'all 0.2s ease',
@@ -999,8 +1280,12 @@ const styles = {
     gap: '8px',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#1e293b',
     marginBottom: '6px',
+  },
+  requiredStar: {
+    color: '#ef4444',
+    fontWeight: 700,
+    fontSize: '16px',
   },
   formIcon: {
     color: '#2563eb',
@@ -1014,7 +1299,6 @@ const styles = {
     boxSizing: 'border-box',
     transition: 'all 0.2s ease',
     outline: 'none',
-    backgroundColor: '#f8fafc',
   },
   fieldError: {
     fontSize: '12px',
@@ -1035,11 +1319,9 @@ const styles = {
   timeLabel: {
     display: 'block',
     fontSize: '12px',
-    color: '#64748b',
     marginBottom: '4px',
   },
   timeSeparator: {
-    color: '#64748b',
     fontSize: '14px',
     fontWeight: 500,
     paddingBottom: '20px',
@@ -1049,20 +1331,16 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '10px 14px',
-    backgroundColor: '#f0fdf4',
     borderRadius: '8px',
     fontSize: '13px',
-    color: '#166534',
     border: '1px solid #bbf7d0',
   },
 
   // Buttons
   cancelBtn: {
     padding: '10px 24px',
-    backgroundColor: 'white',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
     borderRadius: '40px',
+    border: '1px solid #e2e8f0',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: 500,
@@ -1070,7 +1348,75 @@ const styles = {
   },
   saveBtn: {
     padding: '10px 24px',
+    borderRadius: '40px',
+    border: 'none',
     backgroundColor: '#2563eb',
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  // Delete Modal
+  deleteModalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px 24px 0 24px',
+  },
+  deleteIconContainer: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: '#fef2f2',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteIcon: {
+    color: '#dc2626',
+  },
+  deleteModalBody: {
+    padding: '16px 24px 24px 24px',
+    textAlign: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: '0 0 12px 0',
+  },
+  deleteModalText: {
+    fontSize: '15px',
+    margin: '0 0 8px 0',
+    lineHeight: '1.6',
+  },
+  deleteModalSubtext: {
+    fontSize: '13px',
+    margin: 0,
+  },
+  deleteModalFooter: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'center',
+    padding: '16px 24px 24px 24px',
+  },
+  deleteCancelBtn: {
+    padding: '10px 24px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '40px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    transition: 'all 0.2s ease',
+    minWidth: '100px',
+  },
+  deleteConfirmBtn: {
+    padding: '10px 24px',
+    backgroundColor: '#dc2626',
     color: 'white',
     border: 'none',
     borderRadius: '40px',
@@ -1081,6 +1427,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    minWidth: '100px',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
   },
 };
 
@@ -1126,7 +1475,7 @@ if (typeof document !== 'undefined') {
     }
 
     .delete-btn:hover {
-      background-color: #fecaca;
+      background-color: #fecaca !important;
       transform: scale(1.05);
     }
 
@@ -1137,45 +1486,54 @@ if (typeof document !== 'undefined') {
     }
 
     .cancel-btn:hover {
-      background-color: #f8fafc;
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
 
     .modal-close:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
 
     .clear-search:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
 
     .input:focus {
-      border-color: #2563eb;
+      border-color: #2563eb !important;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      background-color: white;
     }
 
     .search-input:focus {
-      border-color: #2563eb;
+      border-color: #2563eb !important;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
     .tr:hover {
-      background-color: #f8fafc;
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
 
     .stat-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.08));
       transition: all 0.2s ease;
     }
 
     .pagination-button:hover:not(:disabled) {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
 
     .pagination-button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    .delete-cancel-btn:hover {
+      background-color: var(--hover-bg, #f8fafc) !important;
+    }
+
+    .delete-confirm-btn:hover:not(:disabled) {
+      background-color: #b91c1c !important;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
     }
 
     /* Scrollbar */
@@ -1188,12 +1546,12 @@ if (typeof document !== 'undefined') {
     }
     
     .modal-body::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: var(--text-muted, #cbd5e1);
       border-radius: 4px;
     }
     
     .modal-body::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
+      background: var(--text-secondary, #94a3b8);
     }
 
     @media (max-width: 768px) {

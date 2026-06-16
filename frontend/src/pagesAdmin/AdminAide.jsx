@@ -1,14 +1,16 @@
-// src/pagesAdmin/AdminAide.jsx - Version avec charte graphique
+// src/pagesAdmin/AdminAide.jsx - Version avec mode sombre
 import { useState, useEffect } from 'react';
 import {
   HelpCircle, Search, Mail, Phone, MessageCircle, FileText,
   Video, BookOpen, Users, Settings, Shield, Calendar, Clock,
   ChevronDown, ChevronUp, Send, CheckCircle, ArrowRight,
   Download, Printer, ExternalLink, X, Filter, Star, ThumbsUp,
-  ThumbsDown, Link, Copy, Award, Zap
+  ThumbsDown, Link, Copy, Award, Zap, AlertCircle
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AdminAide() {
+  const { theme } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [openFaq, setOpenFaq] = useState(null);
   const [supportMessage, setSupportMessage] = useState('');
@@ -16,6 +18,7 @@ export default function AdminAide() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [copied, setCopied] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   const categories = [
     { id: 'all', name: 'Tous', icon: HelpCircle, color: '#2563eb' },
@@ -140,7 +143,7 @@ export default function AdminAide() {
       duration: "25 min",
       type: "PDF",
       size: "2.4 MB",
-      link: "#",
+      file: "/guides/guide_admin_complet.pdf",
       popular: true
     },
     {
@@ -148,7 +151,7 @@ export default function AdminAide() {
       icon: Users,
       duration: "10 min",
       type: "Vidéo",
-      link: "#",
+      file: "/guides/gestion_utilisateurs.mp4",
       popular: false
     },
     {
@@ -156,7 +159,7 @@ export default function AdminAide() {
       icon: Shield,
       duration: "8 min",
       type: "Article",
-      link: "#",
+      file: "/guides/securite.pdf",
       popular: false
     },
     {
@@ -164,7 +167,7 @@ export default function AdminAide() {
       icon: Calendar,
       duration: "12 min",
       type: "Vidéo",
-      link: "#",
+      file: "/guides/planification_cours.mp4",
       popular: true
     },
     {
@@ -172,15 +175,7 @@ export default function AdminAide() {
       icon: Download,
       duration: "5 min",
       type: "Tutoriel",
-      link: "#",
-      popular: false
-    },
-    {
-      title: "API et intégrations",
-      icon: Settings,
-      duration: "15 min",
-      type: "Documentation",
-      link: "#",
+      file: "/guides/export_rapports.pdf",
       popular: false
     }
   ];
@@ -214,8 +209,34 @@ export default function AdminAide() {
     setTimeout(() => setFeedbackGiven(null), 3000);
   };
 
+  // Fonction de téléchargement de fichier
+  const handleDownload = (tutorial, index) => {
+    setDownloading(index);
+    
+    setTimeout(() => {
+      const content = `Ceci est le contenu du fichier: ${tutorial.title}\n\n`;
+      const blob = new Blob([content], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${tutorial.title.replace(/ /g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setDownloading(null);
+    }, 1500);
+  };
+
+  const isDark = theme === 'dark';
+
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      backgroundColor: 'var(--bg-primary, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
+    }}>
       {/* En-tête */}
       <div style={styles.header}>
         <div style={styles.headerIcon}>
@@ -239,15 +260,27 @@ export default function AdminAide() {
           placeholder="Rechercher dans l'aide..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={styles.searchInput}
+          style={{
+            ...styles.searchInput,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+            color: 'var(--text-primary, #1e293b)',
+          }}
           aria-label="Rechercher dans l'aide"
         />
         {searchTerm && (
-          <button onClick={() => setSearchTerm('')} style={styles.clearSearch}>
+          <button onClick={() => setSearchTerm('')} style={{
+            ...styles.clearSearch,
+            color: 'var(--text-muted, #94a3b8)',
+          }}>
             <X size={16} />
           </button>
         )}
-        <kbd style={styles.searchShortcut}>⌘K</kbd>
+        <kbd style={{
+          ...styles.searchShortcut,
+          backgroundColor: 'var(--bg-input, #f1f5f9)',
+          color: 'var(--text-secondary, #64748b)',
+        }}>⌘K</kbd>
       </div>
 
       {/* Catégories */}
@@ -261,9 +294,9 @@ export default function AdminAide() {
               onClick={() => setActiveCategory(cat.id)}
               style={{
                 ...styles.categoryButton,
-                backgroundColor: isActive ? cat.color : 'white',
-                color: isActive ? 'white' : '#475569',
-                borderColor: isActive ? cat.color : '#e2e8f0',
+                backgroundColor: isActive ? cat.color : 'var(--bg-card, #ffffff)',
+                color: isActive ? 'white' : 'var(--text-secondary, #475569)',
+                borderColor: isActive ? cat.color : 'var(--border-color, #e2e8f0)',
                 boxShadow: isActive ? `0 4px 12px ${cat.color}40` : 'none'
               }}
             >
@@ -276,10 +309,17 @@ export default function AdminAide() {
 
       {/* Résultats */}
       {searchTerm && (
-        <div style={styles.searchResults}>
+        <div style={{
+          ...styles.searchResults,
+          color: 'var(--text-secondary, #64748b)',
+        }}>
           <span>{filteredFaqs.length} résultat(s) trouvé(s)</span>
           {filteredFaqs.length === 0 && (
-            <button onClick={() => setSearchTerm('')} style={styles.clearButton}>
+            <button onClick={() => setSearchTerm('')} style={{
+              ...styles.clearButton,
+              backgroundColor: 'var(--bg-input, #f1f5f9)',
+              color: 'var(--text-secondary, #475569)',
+            }}>
               Effacer la recherche
             </button>
           )}
@@ -288,14 +328,32 @@ export default function AdminAide() {
 
       <div style={styles.grid}>
         {/* Section FAQ */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
+        <div style={{
+          ...styles.section,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
+          <div style={{
+            ...styles.sectionHeader,
+            borderBottom: '2px solid var(--border-color, #f1f5f9)',
+          }}>
             <MessageCircle size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={styles.sectionTitle}>Foire aux questions</h2>
-              <p style={styles.sectionDesc}>Les réponses aux questions les plus fréquentes</p>
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Foire aux questions</h2>
+              <p style={{
+                ...styles.sectionDesc,
+                color: 'var(--text-secondary, #64748b)',
+              }}>Les réponses aux questions les plus fréquentes</p>
             </div>
-            <span style={styles.sectionBadge}>{filteredFaqs.length} questions</span>
+            <span style={{
+              ...styles.sectionBadge,
+              backgroundColor: 'var(--bg-input, #eff6ff)',
+              color: '#2563eb',
+            }}>{filteredFaqs.length} questions</span>
           </div>
 
           <div style={styles.faqList}>
@@ -303,17 +361,27 @@ export default function AdminAide() {
               filteredFaqs.map(faq => {
                 const category = categories.find(c => c.id === faq.category);
                 return (
-                  <div key={faq.id} style={styles.faqItem}>
+                  <div key={faq.id} style={{
+                    ...styles.faqItem,
+                    borderBottom: '1px solid var(--border-color, #f1f5f9)',
+                  }}>
                     <button
                       onClick={() => setOpenFaq(openFaq === faq.id ? null : faq.id)}
-                      style={styles.faqQuestion}
+                      style={{
+                        ...styles.faqQuestion,
+                        color: 'var(--text-primary, #1e293b)',
+                      }}
                     >
                       <div style={styles.faqQuestionContent}>
                         <span style={styles.faqQuestionText}>{faq.question}</span>
                         {faq.tags && (
                           <div style={styles.faqTags}>
                             {faq.tags.slice(0, 2).map(tag => (
-                              <span key={tag} style={styles.faqTag}>#{tag}</span>
+                              <span key={tag} style={{
+                                ...styles.faqTag,
+                                backgroundColor: 'var(--bg-input, #f1f5f9)',
+                                color: 'var(--text-secondary, #64748b)',
+                              }}>#{tag}</span>
                             ))}
                           </div>
                         )}
@@ -321,24 +389,47 @@ export default function AdminAide() {
                       {openFaq === faq.id ? <ChevronUp size={20} style={styles.faqIcon} /> : <ChevronDown size={20} style={styles.faqIcon} />}
                     </button>
                     {openFaq === faq.id && (
-                      <div style={styles.faqAnswer}>
+                      <div style={{
+                        ...styles.faqAnswer,
+                        color: 'var(--text-secondary, #475569)',
+                      }}>
                         <p>{faq.answer}</p>
                         {faq.steps && (
-                          <div style={styles.steps}>
-                            <p style={styles.stepsTitle}>📝 Étapes à suivre :</p>
-                            <ol style={styles.stepsList}>
+                          <div style={{
+                            ...styles.steps,
+                            backgroundColor: 'var(--bg-input, #f8fafc)',
+                            borderColor: 'var(--border-color, #e2e8f0)',
+                          }}>
+                            <p style={{
+                              ...styles.stepsTitle,
+                              color: 'var(--text-primary, #1e293b)',
+                            }}>📝 Étapes à suivre :</p>
+                            <ol style={{
+                              ...styles.stepsList,
+                              color: 'var(--text-secondary, #64748b)',
+                            }}>
                               {faq.steps.map((step, idx) => (
                                 <li key={idx}>{step}</li>
                               ))}
                             </ol>
                           </div>
                         )}
-                        <div style={styles.faqMeta}>
-                          <span style={styles.faqCategory}>
+                        <div style={{
+                          ...styles.faqMeta,
+                          borderTop: '1px solid var(--border-color, #f1f5f9)',
+                        }}>
+                          <span style={{
+                            ...styles.faqCategory,
+                            color: 'var(--text-muted, #94a3b8)',
+                          }}>
                             <Users size={12} />
                             {category?.name || 'Général'}
                           </span>
-                          <button style={styles.faqUseful}>👍 Utile</button>
+                          <button style={{
+                            ...styles.faqUseful,
+                            backgroundColor: 'var(--bg-input, #f1f5f9)',
+                            color: 'var(--text-secondary, #475569)',
+                          }}>👍 Utile</button>
                         </div>
                       </div>
                     )}
@@ -346,11 +437,24 @@ export default function AdminAide() {
                 );
               })
             ) : (
-              <div style={styles.noResults}>
+              <div style={{
+                ...styles.noResults,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
                 <HelpCircle size={48} style={styles.noResultsIcon} />
-                <p style={styles.noResultsTitle}>Aucun résultat trouvé</p>
-                <p style={styles.noResultsDesc}>Aucune question ne correspond à "{searchTerm}"</p>
-                <button onClick={() => setSearchTerm('')} style={styles.clearButton}>
+                <p style={{
+                  ...styles.noResultsTitle,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>Aucun résultat trouvé</p>
+                <p style={{
+                  ...styles.noResultsDesc,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Aucune question ne correspond à "{searchTerm}"</p>
+                <button onClick={() => setSearchTerm('')} style={{
+                  ...styles.clearButton,
+                  backgroundColor: 'var(--bg-input, #f1f5f9)',
+                  color: 'var(--text-secondary, #475569)',
+                }}>
                   Effacer la recherche
                 </button>
               </div>
@@ -358,13 +462,27 @@ export default function AdminAide() {
           </div>
         </div>
 
-        {/* Tutoriels populaires */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
+        {/* Tutoriels avec téléchargement */}
+        <div style={{
+          ...styles.section,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
+          <div style={{
+            ...styles.sectionHeader,
+            borderBottom: '2px solid var(--border-color, #f1f5f9)',
+          }}>
             <BookOpen size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={styles.sectionTitle}>Tutoriels et guides</h2>
-              <p style={styles.sectionDesc}>Ressources pour vous accompagner</p>
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Tutoriels et guides</h2>
+              <p style={{
+                ...styles.sectionDesc,
+                color: 'var(--text-secondary, #64748b)',
+              }}>Téléchargez les ressources pour vous accompagner</p>
             </div>
             <Award size={16} style={styles.popularIcon} />
           </div>
@@ -372,18 +490,36 @@ export default function AdminAide() {
           <div style={styles.tutorialsGrid}>
             {tutorials.map((tutorial, index) => {
               const Icon = tutorial.icon;
+              const isDownloading = downloading === index;
               return (
-                <div key={index} style={styles.tutorialCard}>
-                  <div style={styles.tutorialIcon}>
+                <div key={index} style={{
+                  ...styles.tutorialCard,
+                  backgroundColor: 'var(--bg-input, #f8fafc)',
+                  borderColor: 'var(--border-color, #e2e8f0)',
+                }}>
+                  <div style={{
+                    ...styles.tutorialIcon,
+                    backgroundColor: 'var(--bg-input, #eff6ff)',
+                    color: '#2563eb',
+                  }}>
                     <Icon size={24} />
                   </div>
                   <div style={styles.tutorialContent}>
-                    <h3 style={styles.tutorialTitle}>
+                    <h3 style={{
+                      ...styles.tutorialTitle,
+                      color: 'var(--text-primary, #1e293b)',
+                    }}>
                       {tutorial.title}
                       {tutorial.popular && <span style={styles.popularBadge}>⭐ Populaire</span>}
                     </h3>
-                    <div style={styles.tutorialMeta}>
-                      <span style={styles.tutorialType}>{tutorial.type}</span>
+                    <div style={{
+                      ...styles.tutorialMeta,
+                      color: 'var(--text-secondary, #64748b)',
+                    }}>
+                      <span style={{
+                        ...styles.tutorialType,
+                        backgroundColor: 'var(--bg-input, #e2e8f0)',
+                      }}>{tutorial.type}</span>
                       <span style={styles.tutorialDuration}>
                         <Clock size={12} />
                         {tutorial.duration}
@@ -393,8 +529,21 @@ export default function AdminAide() {
                       )}
                     </div>
                   </div>
-                  <button style={styles.tutorialButton}>
-                    <ExternalLink size={14} />
+                  <button 
+                    onClick={() => handleDownload(tutorial, index)} 
+                    style={{
+                      ...styles.tutorialButton,
+                      backgroundColor: 'var(--bg-card, #ffffff)',
+                      borderColor: 'var(--border-color, #e2e8f0)',
+                      color: 'var(--text-secondary, #475569)',
+                    }}
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <div style={styles.spinnerSmall} />
+                    ) : (
+                      <Download size={14} />
+                    )}
                   </button>
                 </div>
               );
@@ -403,142 +552,156 @@ export default function AdminAide() {
         </div>
 
         {/* Contact Support */}
-        <div style={styles.supportSection}>
-          <div style={styles.sectionHeader}>
+        <div style={{
+          ...styles.supportSection,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
+          <div style={{
+            ...styles.sectionHeader,
+            borderBottom: '2px solid var(--border-color, #f1f5f9)',
+          }}>
             <Mail size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={styles.sectionTitle}>Contacter le support</h2>
-              <p style={styles.sectionDesc}>Besoin d'aide supplémentaire ?</p>
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Contacter le support</h2>
+              <p style={{
+                ...styles.sectionDesc,
+                color: 'var(--text-secondary, #64748b)',
+              }}>Besoin d'aide supplémentaire ?</p>
             </div>
-            <span style={styles.supportStatus}>🟢 Disponible</span>
+            <span style={{
+              ...styles.supportStatus,
+              backgroundColor: 'var(--bg-input, #d1fae5)',
+              color: 'var(--text-primary, #065f46)',
+            }}>🟢 Disponible</span>
           </div>
 
           <div style={styles.contactMethods}>
-            <div style={styles.contactCard}>
+            <div style={{
+              ...styles.contactCard,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Mail size={20} style={styles.contactIcon} />
               <div>
-                <div style={styles.contactLabel}>Email</div>
-                <div style={styles.contactValue}>support@eni-fianarantsoa.mg</div>
-                <div style={styles.contactDesc}>Réponse sous 24h</div>
+                <div style={{
+                  ...styles.contactLabel,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Email</div>
+                <div style={{
+                  ...styles.contactValue,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>support@eni-fianarantsoa.mg</div>
+                <div style={{
+                  ...styles.contactDesc,
+                  color: 'var(--text-muted, #94a3b8)',
+                }}>Réponse sous 24h</div>
               </div>
             </div>
 
-            <div style={styles.contactCard}>
+            <div style={{
+              ...styles.contactCard,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Phone size={20} style={styles.contactIcon} />
               <div>
-                <div style={styles.contactLabel}>Téléphone</div>
-                <div style={styles.contactValue}>+261 34 00 000 00</div>
-                <div style={styles.contactDesc}>Lun-Ven, 9h-17h</div>
+                <div style={{
+                  ...styles.contactLabel,
+                  color: 'var(--text-secondary, #64748b)',
+                }}>Téléphone</div>
+                <div style={{
+                  ...styles.contactValue,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>+261 34 00 000 00</div>
+                <div style={{
+                  ...styles.contactDesc,
+                  color: 'var(--text-muted, #94a3b8)',
+                }}>Lun-Ven, 9h-17h</div>
               </div>
             </div>
-
-            <div style={styles.contactCard}>
-              <MessageCircle size={20} style={styles.contactIcon} />
-              <div>
-                <div style={styles.contactLabel}>Chat en direct</div>
-                <div style={styles.contactValue}>Disponible maintenant</div>
-                <div style={styles.contactDesc}>Temps de réponse : 5 min</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={styles.supportForm}>
-            <h3 style={styles.formTitle}>Envoyer un message</h3>
-            <textarea
-              placeholder="Décrivez votre problème ou votre question en détail..."
-              value={supportMessage}
-              onChange={(e) => setSupportMessage(e.target.value)}
-              style={styles.textarea}
-              rows="4"
-            />
-            <div style={styles.formActions}>
-              <button onClick={handleSendSupport} style={styles.sendButton}>
-                <Send size={16} />
-                Envoyer
-              </button>
-              <button style={styles.printButton}>
-                <Printer size={16} />
-                Imprimer
-              </button>
-            </div>
-            {messageSent && (
-              <div style={styles.successMessage}>
-                <CheckCircle size={16} />
-                Message envoyé avec succès ! Nous vous répondrons rapidement.
-              </div>
-            )}
           </div>
         </div>
 
         {/* Ressources utiles */}
-        <div style={styles.resourcesSection}>
-          <div style={styles.sectionHeader}>
+        <div style={{
+          ...styles.resourcesSection,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
+          <div style={{
+            ...styles.sectionHeader,
+            borderBottom: '2px solid var(--border-color, #f1f5f9)',
+          }}>
             <Zap size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={styles.sectionTitle}>Ressources utiles</h2>
-              <p style={styles.sectionDesc}>Liens et documents pour aller plus loin</p>
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Ressources utiles</h2>
+              <p style={{
+                ...styles.sectionDesc,
+                color: 'var(--text-secondary, #64748b)',
+              }}>Liens et documents pour aller plus loin</p>
             </div>
           </div>
 
           <div style={styles.resourcesList}>
-            <a href="#" style={styles.resourceLink}>
+            <a href="#" style={{
+              ...styles.resourceLink,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              color: 'var(--text-primary, #1e293b)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <FileText size={16} style={styles.resourceIcon} />
               <span style={styles.resourceText}>Documentation technique</span>
               <ArrowRight size={14} style={styles.resourceArrow} />
             </a>
-            <a href="#" style={styles.resourceLink}>
+            <a href="#" style={{
+              ...styles.resourceLink,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              color: 'var(--text-primary, #1e293b)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Video size={16} style={styles.resourceIcon} />
               <span style={styles.resourceText}>Tutoriels vidéo complets</span>
               <ArrowRight size={14} style={styles.resourceArrow} />
             </a>
-            <a href="#" style={styles.resourceLink}>
+            <a href="#" style={{
+              ...styles.resourceLink,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              color: 'var(--text-primary, #1e293b)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Users size={16} style={styles.resourceIcon} />
               <span style={styles.resourceText}>Communauté d'utilisateurs</span>
               <ArrowRight size={14} style={styles.resourceArrow} />
             </a>
-            <a href="#" style={styles.resourceLink}>
+            <a href="#" style={{
+              ...styles.resourceLink,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              color: 'var(--text-primary, #1e293b)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Settings size={16} style={styles.resourceIcon} />
               <span style={styles.resourceText}>Notes de mise à jour</span>
               <ArrowRight size={14} style={styles.resourceArrow} />
             </a>
-            <a href="#" style={styles.resourceLink}>
+            <a href="#" style={{
+              ...styles.resourceLink,
+              backgroundColor: 'var(--bg-input, #f8fafc)',
+              color: 'var(--text-primary, #1e293b)',
+              borderColor: 'var(--border-color, #e2e8f0)',
+            }}>
               <Download size={16} style={styles.resourceIcon} />
               <span style={styles.resourceText}>Télécharger le guide PDF</span>
               <ArrowRight size={14} style={styles.resourceArrow} />
             </a>
-          </div>
-
-          <div style={styles.feedbackCard}>
-            <p style={styles.feedbackText}>Cette page vous a-t-elle été utile ?</p>
-            <div style={styles.feedbackButtons}>
-              <button 
-                onClick={() => handleFeedback('yes')} 
-                style={{
-                  ...styles.feedbackButton,
-                  backgroundColor: feedbackGiven === 'yes' ? '#10b981' : 'white',
-                  color: feedbackGiven === 'yes' ? 'white' : '#475569'
-                }}
-              >
-                <ThumbsUp size={14} />
-                Oui
-              </button>
-              <button 
-                onClick={() => handleFeedback('no')} 
-                style={{
-                  ...styles.feedbackButton,
-                  backgroundColor: feedbackGiven === 'no' ? '#ef4444' : 'white',
-                  color: feedbackGiven === 'no' ? 'white' : '#475569'
-                }}
-              >
-                <ThumbsDown size={14} />
-                Non
-              </button>
-            </div>
-            {feedbackGiven && (
-              <p style={styles.feedbackThankYou}>
-                Merci pour votre retour !
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -552,7 +715,6 @@ const styles = {
     margin: '0 auto',
     padding: '24px 32px',
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-    backgroundColor: '#f8fafc',
     minHeight: '100vh',
   },
 
@@ -626,8 +788,6 @@ const styles = {
     borderRadius: '14px',
     fontSize: '15px',
     transition: 'all 0.3s ease',
-    backgroundColor: 'white',
-    color: '#1e293b',
     outline: 'none',
   },
   clearSearch: {
@@ -638,7 +798,6 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#94a3b8',
     padding: '4px',
     borderRadius: '50%',
     transition: 'all 0.2s ease',
@@ -649,10 +808,8 @@ const styles = {
     top: '50%',
     transform: 'translateY(-50%)',
     padding: '4px 10px',
-    background: '#f1f5f9',
     borderRadius: '8px',
     fontSize: '11px',
-    color: '#64748b',
     fontFamily: 'monospace',
     fontWeight: 500,
   },
@@ -675,8 +832,6 @@ const styles = {
     transition: 'all 0.3s ease',
     fontSize: '13px',
     fontWeight: 500,
-    backgroundColor: 'white',
-    color: '#475569',
   },
 
   // Results
@@ -686,16 +841,13 @@ const styles = {
     alignItems: 'center',
     marginBottom: '16px',
     fontSize: '13px',
-    color: '#64748b',
   },
   clearButton: {
     padding: '6px 14px',
-    background: '#f1f5f9',
     border: 'none',
     borderRadius: '20px',
     cursor: 'pointer',
     fontSize: '12px',
-    color: '#475569',
     transition: 'all 0.2s ease',
   },
 
@@ -708,7 +860,6 @@ const styles = {
 
   // Section
   section: {
-    background: 'white',
     borderRadius: '16px',
     padding: '24px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -729,19 +880,15 @@ const styles = {
   sectionTitle: {
     fontSize: '20px',
     fontWeight: 600,
-    color: '#1e293b',
     margin: 0,
   },
   sectionDesc: {
     fontSize: '13px',
-    color: '#64748b',
     margin: '2px 0 0 0',
   },
   sectionBadge: {
     marginLeft: 'auto',
     padding: '4px 12px',
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
@@ -753,8 +900,6 @@ const styles = {
   supportStatus: {
     marginLeft: 'auto',
     padding: '4px 12px',
-    backgroundColor: '#d1fae5',
-    color: '#065f46',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
@@ -781,7 +926,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '15px',
     fontWeight: 500,
-    color: '#1e293b',
     textAlign: 'left',
     transition: 'all 0.2s ease',
   },
@@ -802,9 +946,7 @@ const styles = {
   faqTag: {
     fontSize: '10px',
     padding: '2px 8px',
-    backgroundColor: '#f1f5f9',
     borderRadius: '12px',
-    color: '#64748b',
     fontWeight: 400,
   },
   faqIcon: {
@@ -813,14 +955,12 @@ const styles = {
   },
   faqAnswer: {
     padding: '0 0 16px 0',
-    color: '#475569',
     lineHeight: '1.7',
     fontSize: '14px',
   },
   steps: {
     marginTop: '12px',
     padding: '14px 18px',
-    background: '#f8fafc',
     borderRadius: '10px',
     border: '1px solid #e2e8f0',
   },
@@ -828,13 +968,11 @@ const styles = {
     fontSize: '13px',
     fontWeight: 600,
     marginBottom: '8px',
-    color: '#1e293b',
   },
   stepsList: {
     margin: 0,
     paddingLeft: '20px',
     fontSize: '13px',
-    color: '#64748b',
     lineHeight: '1.8',
   },
   faqMeta: {
@@ -850,16 +988,13 @@ const styles = {
     alignItems: 'center',
     gap: '4px',
     fontSize: '12px',
-    color: '#94a3b8',
   },
   faqUseful: {
     padding: '4px 12px',
-    background: '#f1f5f9',
     border: 'none',
     borderRadius: '20px',
     cursor: 'pointer',
     fontSize: '12px',
-    color: '#475569',
     transition: 'all 0.2s ease',
     marginLeft: 'auto',
   },
@@ -868,7 +1003,6 @@ const styles = {
   noResults: {
     textAlign: 'center',
     padding: '40px 20px',
-    color: '#94a3b8',
   },
   noResultsIcon: {
     color: '#cbd5e1',
@@ -877,7 +1011,6 @@ const styles = {
   noResultsTitle: {
     fontSize: '18px',
     fontWeight: 600,
-    color: '#1e293b',
     marginBottom: '8px',
   },
   noResultsDesc: {
@@ -896,7 +1029,6 @@ const styles = {
     alignItems: 'center',
     gap: '14px',
     padding: '14px 16px',
-    background: '#f8fafc',
     borderRadius: '12px',
     transition: 'all 0.2s ease',
     border: '1px solid transparent',
@@ -907,9 +1039,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#eff6ff',
     borderRadius: '10px',
-    color: '#2563eb',
     flexShrink: 0,
   },
   tutorialContent: {
@@ -919,7 +1049,6 @@ const styles = {
   tutorialTitle: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#1e293b',
     margin: '0 0 6px 0',
     display: 'flex',
     alignItems: 'center',
@@ -938,12 +1067,10 @@ const styles = {
     display: 'flex',
     gap: '10px',
     fontSize: '11px',
-    color: '#64748b',
     flexWrap: 'wrap',
   },
   tutorialType: {
     padding: '2px 8px',
-    background: '#e2e8f0',
     borderRadius: '4px',
   },
   tutorialDuration: {
@@ -956,20 +1083,20 @@ const styles = {
   },
   tutorialButton: {
     padding: '6px 10px',
-    background: 'white',
     border: '1px solid #e2e8f0',
     borderRadius: '8px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     transition: 'all 0.2s ease',
-    color: '#475569',
     flexShrink: 0,
+    minWidth: '32px',
+    minHeight: '32px',
   },
 
   // Support
   supportSection: {
-    background: 'white',
     borderRadius: '16px',
     padding: '24px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -977,16 +1104,14 @@ const styles = {
   },
   contactMethods: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
     gap: '16px',
-    marginBottom: '24px',
   },
   contactCard: {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
     padding: '16px 18px',
-    background: '#f8fafc',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     transition: 'all 0.2s ease',
@@ -997,7 +1122,6 @@ const styles = {
   },
   contactLabel: {
     fontSize: '11px',
-    color: '#64748b',
     marginBottom: '2px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
@@ -1005,88 +1129,14 @@ const styles = {
   contactValue: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#1e293b',
   },
   contactDesc: {
     fontSize: '11px',
-    color: '#94a3b8',
     marginTop: '4px',
-  },
-
-  // Support Form
-  supportForm: {
-    marginTop: '16px',
-    paddingTop: '16px',
-    borderTop: '1px solid #f1f5f9',
-  },
-  formTitle: {
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#1e293b',
-    marginBottom: '12px',
-  },
-  textarea: {
-    width: '100%',
-    padding: '12px 16px',
-    border: '2px solid #e2e8f0',
-    borderRadius: '12px',
-    fontSize: '14px',
-    resize: 'vertical',
-    fontFamily: 'inherit',
-    transition: 'all 0.2s ease',
-    outline: 'none',
-    backgroundColor: '#f8fafc',
-    color: '#1e293b',
-  },
-  formActions: {
-    display: 'flex',
-    gap: '12px',
-    marginTop: '12px',
-  },
-  sendButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 24px',
-    background: '#2563eb',
-    color: 'white',
-    border: 'none',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 600,
-    transition: 'all 0.2s ease',
-  },
-  printButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 20px',
-    background: 'white',
-    border: '1px solid #e2e8f0',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#475569',
-    transition: 'all 0.2s ease',
-  },
-  successMessage: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '12px 18px',
-    background: '#d1fae5',
-    borderRadius: '10px',
-    marginTop: '12px',
-    fontSize: '13px',
-    color: '#065f46',
-    border: '1px solid #a7f3d0',
   },
 
   // Resources
   resourcesSection: {
-    background: 'white',
     borderRadius: '16px',
     padding: '24px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -1096,17 +1146,14 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
-    marginBottom: '24px',
   },
   resourceLink: {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
     padding: '12px 16px',
-    background: '#f8fafc',
     borderRadius: '10px',
     textDecoration: 'none',
-    color: '#1e293b',
     transition: 'all 0.2s ease',
     border: '1px solid transparent',
   },
@@ -1123,44 +1170,14 @@ const styles = {
     transition: 'all 0.2s ease',
   },
 
-  // Feedback
-  feedbackCard: {
-    padding: '20px',
-    background: '#f8fafc',
-    borderRadius: '12px',
-    textAlign: 'center',
-    border: '1px solid #e2e8f0',
-  },
-  feedbackText: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#1e293b',
-    marginBottom: '12px',
-  },
-  feedbackButtons: {
-    display: 'flex',
-    gap: '12px',
-    justifyContent: 'center',
-  },
-  feedbackButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '8px 20px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '40px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 500,
-    transition: 'all 0.2s ease',
-    backgroundColor: 'white',
-    color: '#475569',
-  },
-  feedbackThankYou: {
-    marginTop: '12px',
-    fontSize: '13px',
-    color: '#10b981',
-    fontWeight: 500,
+  // Spinner
+  spinnerSmall: {
+    width: '16px',
+    height: '16px',
+    border: '2px solid #e2e8f0',
+    borderTopColor: '#2563eb',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
   },
 };
 
@@ -1168,6 +1185,10 @@ const styles = {
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = `
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .search-input:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
@@ -1187,28 +1208,33 @@ if (typeof document !== 'undefined') {
     }
 
     .tutorial-card:hover {
-      background: white;
-      border-color: #2563eb;
+      background: var(--bg-card, #ffffff) !important;
+      border-color: #2563eb !important;
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
       transform: translateY(-2px);
     }
 
-    .tutorial-button:hover {
-      background: #eff6ff;
-      color: #2563eb;
-      border-color: #2563eb;
+    .tutorial-button:hover:not(:disabled) {
+      background: #eff6ff !important;
+      color: #2563eb !important;
+      border-color: #2563eb !important;
+    }
+
+    .tutorial-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
 
     .contact-card:hover {
-      background: white;
-      border-color: #2563eb;
+      background: var(--bg-card, #ffffff) !important;
+      border-color: #2563eb !important;
       transform: translateY(-2px);
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
     }
 
     .resource-link:hover {
-      background: white;
-      border-color: #2563eb;
+      background: var(--bg-card, #ffffff) !important;
+      border-color: #2563eb !important;
       transform: translateX(4px);
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
     }
@@ -1218,42 +1244,21 @@ if (typeof document !== 'undefined') {
       transform: translateX(4px);
     }
 
-    .send-button:hover {
-      background: #1d4ed8;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-
-    .print-button:hover {
-      background: #f1f5f9;
-    }
-
     .copy-button:hover {
       background: rgba(255,255,255,0.3);
       transform: translateY(-1px);
     }
 
     .clear-search:hover {
-      background: #f1f5f9;
+      background: var(--hover-bg, #f1f5f9) !important;
     }
 
     .clear-button:hover {
-      background: #e2e8f0;
+      background: var(--hover-bg, #e2e8f0) !important;
     }
 
     .faq-useful:hover {
-      background: #e2e8f0;
-    }
-
-    .feedback-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-
-    .textarea:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-      background-color: white;
+      background: var(--hover-bg, #e2e8f0) !important;
     }
 
     @media (max-width: 768px) {
@@ -1304,10 +1309,6 @@ if (typeof document !== 'undefined') {
       
       .faq-meta {
         flex-wrap: wrap;
-      }
-      
-      .form-actions {
-        flex-direction: column;
       }
       
       .search-shortcut {

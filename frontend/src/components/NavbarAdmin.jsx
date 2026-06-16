@@ -1,25 +1,21 @@
-// src/components/NavbarAdmin.jsx - Version avec charte graphique
+// src/components/NavbarAdmin.jsx - Version sans notifications
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Calendar, Users, DoorOpen, GraduationCap,
   LogOut, Menu, X, Clock, Settings, HelpCircle, Bell,
-  ChevronLeft, ChevronRight, User, Mail, Shield
+  ChevronLeft, ChevronRight, User, Mail, Shield, AlertTriangle
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 export default function NavbarAdmin({ children }) {
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications] = useState([
-    { id: 1, message: "Nouveau professeur inscrit", date: "2024-01-15", read: false, type: "success" },
-    { id: 2, message: "Emploi du temps modifié", date: "2024-01-14", read: false, type: "info" },
-    { id: 3, message: "Nouvel étudiant inscrit", date: "2024-01-13", read: true, type: "success" }
-  ]);
 
   const menu = [
     { path: "/admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -38,71 +34,79 @@ export default function NavbarAdmin({ children }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [showConfirmModal]);
 
-  // Fermer les notifications en cliquant en dehors
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (showNotifications && !e.target.closest('.notifications-container')) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [showNotifications]);
-
   const handleLogout = async () => { 
     await logout(); 
     navigate("/"); 
   };
-  
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // Obtenir l'icône de notification
-  const getNotificationIcon = (type) => {
-    switch(type) {
-      case 'success': return <div style={styles.notifDotSuccess} />;
-      case 'info': return <div style={styles.notifDotInfo} />;
-      default: return <div style={styles.notifDotDefault} />;
-    }
-  };
 
   return (
-    <div style={styles.page}>
+    <div style={{
+      minHeight: "100vh",
+      backgroundColor: "var(--bg-primary, #f8fafc)",
+      fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
+      color: "var(--text-primary, #1e293b)",
+    }}>
       {/* SIDEBAR */}
       <div style={{ 
-        ...styles.sidebar, 
+        ...styles.sidebar,
+        backgroundColor: "var(--bg-card, #ffffff)",
+        borderRight: "1px solid var(--border-color, #e2e8f0)",
         width: sidebarOpen ? 280 : 80,
         boxShadow: sidebarOpen 
-          ? '2px 0 20px rgba(0, 0, 0, 0.08)' 
-          : '2px 0 10px rgba(0, 0, 0, 0.05)'
+          ? '2px 0 20px var(--shadow-color, rgba(0, 0, 0, 0.08))' 
+          : '2px 0 10px var(--shadow-color, rgba(0, 0, 0, 0.05))'
       }}>
         <button 
-          style={styles.toggle} 
+          style={{
+            ...styles.toggle,
+            backgroundColor: "var(--bg-card, #ffffff)",
+            borderColor: "var(--border-color, #e2e8f0)",
+            color: "var(--text-secondary, #475569)",
+          }}
           onClick={() => setSidebarOpen(!sidebarOpen)}
           aria-label={sidebarOpen ? "Réduire le menu" : "Agrandir le menu"}
         >
           {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
 
-        <div style={styles.logo}>
+        <div style={{
+          ...styles.logo,
+          borderBottom: "1px solid var(--border-color, #f1f5f9)",
+        }}>
           <div style={styles.logoIcon}>
             <GraduationCap size={sidebarOpen ? 35 : 28} color="#2563eb" />
           </div>
           {sidebarOpen && (
             <div style={styles.logoText}>
-              <b style={styles.logoTitle}>ENI Admin</b>
-              <small style={styles.logoSubtitle}>Panel de contrôle</small>
+              <b style={{
+                ...styles.logoTitle,
+                color: "var(--text-primary, #1e293b)",
+              }}>ENI Admin</b>
+              <small style={{
+                ...styles.logoSubtitle,
+                color: "var(--text-secondary, #64748b)",
+              }}>Panel de contrôle</small>
             </div>
           )}
         </div>
 
-        <div style={styles.user}>
+        <div style={{
+          ...styles.user,
+          borderBottom: "1px solid var(--border-color, #f1f5f9)",
+        }}>
           <div style={styles.avatar}>
             {user?.name?.charAt(0)?.toUpperCase() || "A"}
           </div>
           {sidebarOpen && (
             <div style={styles.userInfo}>
-              <b style={styles.userName}>{user?.name || "Administrateur"}</b>
-              <small style={styles.userRole}>Administrateur</small>
+              <b style={{
+                ...styles.userName,
+                color: "var(--text-primary, #1e293b)",
+              }}>{user?.name || "Administrateur"}</b>
+              <small style={{
+                ...styles.userRole,
+                color: "var(--text-secondary, #64748b)",
+              }}>Administrateur</small>
             </div>
           )}
         </div>
@@ -118,7 +122,7 @@ export default function NavbarAdmin({ children }) {
                 style={{
                   ...styles.link,
                   backgroundColor: isActive ? '#2563eb' : 'transparent',
-                  color: isActive ? 'white' : '#475569',
+                  color: isActive ? 'white' : "var(--text-secondary, #475569)",
                   justifyContent: sidebarOpen ? 'flex-start' : 'center',
                   padding: sidebarOpen ? '12px 16px' : '12px',
                   borderRadius: sidebarOpen ? '12px' : '10px',
@@ -134,73 +138,39 @@ export default function NavbarAdmin({ children }) {
           })}
         </nav>
 
-        <div style={styles.bottom}>
-          <div style={{ position: 'relative', width: '100%' }} className="notifications-container">
-            <button 
-              style={styles.button} 
-              onClick={() => setShowNotifications(!showNotifications)}
-              aria-label="Notifications"
-            >
-              <Bell size={20} />
-              {sidebarOpen && <span>Notifications</span>}
-              {unreadCount > 0 && (
-                <span style={styles.badge} aria-label={`${unreadCount} notifications non lues`}>
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            {showNotifications && (
-              <div style={styles.notificationsDropdown} role="dialog" aria-label="Notifications">
-                <div style={styles.notificationsHeader}>
-                  <span style={styles.notificationsTitle}>Notifications</span>
-                  <button 
-                    onClick={() => setShowNotifications(false)} 
-                    style={styles.closeDropdown}
-                    aria-label="Fermer les notifications"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div style={styles.notificationsList}>
-                  {notifications.length === 0 ? (
-                    <div style={styles.noNotifications}>Aucune notification</div>
-                  ) : (
-                    notifications.map(n => (
-                      <div key={n.id} style={styles.notificationItem}>
-                        {getNotificationIcon(n.type)}
-                        <div style={styles.notificationContent}>
-                          <div style={styles.notificationMessage}>{n.message}</div>
-                          <small style={styles.notificationDate}>{n.date}</small>
-                        </div>
-                        {!n.read && <div style={styles.notificationUnread} />}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          
+        <div style={{
+          ...styles.bottom,
+          borderTop: "1px solid var(--border-color, #f1f5f9)",
+        }}>
           <button 
-            style={styles.button} 
+            style={{
+              ...styles.button,
+              color: "var(--text-secondary, #475569)",
+            }}
             onClick={() => navigate("/admin/parametres")}
             aria-label="Paramètres"
           >
             <Settings size={20} />
-            {sidebarOpen && <span>Paramètres</span>}
+            {sidebarOpen && <span style={{ color: "var(--text-secondary, #475569)" }}>Paramètres</span>}
           </button>
           
           <button 
-            style={styles.button} 
+            style={{
+              ...styles.button,
+              color: "var(--text-secondary, #475569)",
+            }}
             onClick={() => navigate("/admin/aide")}
             aria-label="Aide"
           >
             <HelpCircle size={20} />
-            {sidebarOpen && <span>Aide</span>}
+            {sidebarOpen && <span style={{ color: "var(--text-secondary, #475569)" }}>Aide</span>}
           </button>
           
           <button 
-            style={{ ...styles.button, color: '#dc2626' }} 
+            style={{ 
+              ...styles.button, 
+              color: '#dc2626'
+            }} 
             onClick={() => setShowConfirmModal(true)}
             aria-label="Déconnexion"
           >
@@ -219,7 +189,8 @@ export default function NavbarAdmin({ children }) {
           padding: "30px",
           boxSizing: "border-box",
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          backgroundColor: "#f8fafc",
+          backgroundColor: "var(--bg-primary, #f8fafc)",
+          color: "var(--text-primary, #1e293b)",
         }}
       >
         {children}
@@ -233,36 +204,72 @@ export default function NavbarAdmin({ children }) {
           role="dialog" 
           aria-modal="true"
           aria-labelledby="modal-title"
+          onClick={() => setShowConfirmModal(false)}
         >
-          <div style={styles.modalContent}>
-            <div style={styles.modalHeader}>
-              <h3 id="modal-title" style={styles.modalTitle}>Confirmation de déconnexion</h3>
-              <button 
-                style={styles.closeButton} 
-                onClick={() => setShowConfirmModal(false)}
-                aria-label="Fermer"
-              >
-                ×
-              </button>
-            </div>
-            <div style={styles.modalBody}>
-              <p style={styles.modalText}>Êtes-vous sûr de vouloir vous déconnecter ?</p>
-              <p style={styles.modalSubText}>Vous devrez vous reconnecter pour accéder à votre espace.</p>
-            </div>
-            <div style={styles.modalFooter}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: "var(--bg-card, #ffffff)",
+            boxShadow: "0 20px 60px var(--shadow-color, rgba(0, 0, 0, 0.2))",
+            maxWidth: "420px",
+          }} onClick={e => e.stopPropagation()}>
+            {/* Header avec icône d'avertissement */}
+            <div style={styles.deleteModalHeader}>
+              <div style={styles.deleteIconContainer}>
+                <AlertTriangle size={32} style={styles.deleteIcon} />
+              </div>
               <button 
                 onClick={() => setShowConfirmModal(false)} 
-                style={styles.cancelButton}
+                style={{
+                  ...styles.modalClose,
+                  color: "var(--text-muted, #94a3b8)",
+                }}
+                aria-label="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {/* Corps du modal */}
+            <div style={styles.deleteModalBody}>
+              <h3 style={{
+                ...styles.deleteModalTitle,
+                color: "var(--text-primary, #1e293b)",
+              }}>Confirmation de déconnexion</h3>
+              <p style={{
+                ...styles.deleteModalText,
+                color: "var(--text-secondary, #475569)",
+              }}>
+                Êtes-vous sûr de vouloir vous déconnecter ?
+              </p>
+              <p style={{
+                ...styles.deleteModalSubtext,
+                color: "var(--text-muted, #94a3b8)",
+              }}>
+                Vous devrez vous reconnecter pour accéder à votre espace.
+              </p>
+            </div>
+
+            {/* Footer avec boutons */}
+            <div style={styles.deleteModalFooter}>
+              <button 
+                onClick={() => setShowConfirmModal(false)} 
+                style={{
+                  ...styles.deleteCancelBtn,
+                  backgroundColor: "var(--bg-card, #ffffff)",
+                  borderColor: "var(--border-color, #e2e8f0)",
+                  color: "var(--text-secondary, #475569)",
+                }}
                 aria-label="Annuler la déconnexion"
               >
                 Annuler
               </button>
               <button 
                 onClick={handleLogout} 
-                style={styles.confirmButton}
+                style={styles.deleteConfirmBtn}
                 aria-label="Confirmer la déconnexion"
               >
-                Oui, me déconnecter
+                <LogOut size={16} />
+                Se déconnecter
               </button>
             </div>
           </div>
@@ -273,20 +280,12 @@ export default function NavbarAdmin({ children }) {
 }
 
 const styles = {
-  page: { 
-    minHeight: "100vh", 
-    backgroundColor: "#f8fafc",
-    fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-  },
-  
-  // Sidebar - Charte graphique
+  // Sidebar
   sidebar: {
     position: "fixed",
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: "white",
-    boxShadow: "2px 0 20px rgba(0, 0, 0, 0.08)",
     display: "flex",
     flexDirection: "column",
     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -302,14 +301,12 @@ const styles = {
     height: 28,
     borderRadius: "50%",
     border: "2px solid #e2e8f0",
-    backgroundColor: "white",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1001,
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-    color: "#475569",
     transition: "all 0.2s ease",
     padding: 0,
   },
@@ -319,7 +316,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    borderBottom: "1px solid #f1f5f9",
     minHeight: "80px",
   },
   logoIcon: {
@@ -336,12 +332,10 @@ const styles = {
   logoTitle: {
     fontSize: "18px",
     fontWeight: 700,
-    color: "#1e293b",
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
   logoSubtitle: {
     fontSize: "11px",
-    color: "#64748b",
     fontWeight: 400,
   },
   
@@ -350,7 +344,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    borderBottom: "1px solid #f1f5f9",
   },
   avatar: {
     width: 45,
@@ -375,14 +368,12 @@ const styles = {
   userName: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#1e293b",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   userRole: {
     fontSize: "11px",
-    color: "#64748b",
     fontWeight: 400,
   },
   
@@ -412,7 +403,6 @@ const styles = {
   
   bottom: {
     padding: "16px 12px",
-    borderTop: "1px solid #f1f5f9",
     display: "flex",
     flexDirection: "column",
     gap: "4px",
@@ -430,126 +420,8 @@ const styles = {
     transition: "all 0.2s ease",
     fontWeight: 500,
     fontSize: "14px",
-    color: "#475569",
     position: "relative",
     textAlign: "left",
-  },
-  
-  badge: {
-    position: "absolute",
-    right: "12px",
-    top: "50%",
-    transform: "translateY(-50%)",
-    backgroundColor: "#dc2626",
-    color: "white",
-    borderRadius: "50%",
-    width: "20px",
-    height: "20px",
-    fontSize: "10px",
-    fontWeight: 600,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  
-  // Notifications
-  notificationsDropdown: {
-    position: "absolute",
-    bottom: "calc(100% + 8px)",
-    left: 0,
-    width: "320px",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.12)",
-    border: "1px solid #e2e8f0",
-    zIndex: 1002,
-    overflow: "hidden",
-    animation: "slideUp 0.2s ease-out",
-  },
-  notificationsHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "12px 16px",
-    backgroundColor: "#f8fafc",
-    borderBottom: "1px solid #e2e8f0",
-  },
-  notificationsTitle: {
-    fontWeight: 600,
-    color: "#1e293b",
-    fontSize: "14px",
-  },
-  closeDropdown: {
-    background: "none",
-    border: "none",
-    fontSize: "20px",
-    cursor: "pointer",
-    color: "#94a3b8",
-    padding: "0 4px",
-    transition: "color 0.2s ease",
-  },
-  notificationsList: {
-    maxHeight: "300px",
-    overflowY: "auto",
-  },
-  notificationItem: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "12px",
-    padding: "12px 16px",
-    borderBottom: "1px solid #f1f5f9",
-    transition: "background 0.2s ease",
-    position: "relative",
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationMessage: {
-    fontSize: "13px",
-    color: "#1e293b",
-    marginBottom: "4px",
-  },
-  notificationDate: {
-    fontSize: "11px",
-    color: "#94a3b8",
-  },
-  notificationUnread: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#2563eb",
-    flexShrink: 0,
-    marginTop: "6px",
-  },
-  noNotifications: {
-    padding: "24px",
-    textAlign: "center",
-    color: "#94a3b8",
-    fontSize: "14px",
-  },
-  notifDotSuccess: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#10b981",
-    flexShrink: 0,
-    marginTop: "4px",
-  },
-  notifDotInfo: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#3b82f6",
-    flexShrink: 0,
-    marginTop: "4px",
-  },
-  notifDotDefault: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#94a3b8",
-    flexShrink: 0,
-    marginTop: "4px",
   },
   
   // Modal de confirmation
@@ -566,7 +438,6 @@ const styles = {
     padding: "20px",
   },
   modalContent: {
-    backgroundColor: "white",
     borderRadius: "16px",
     width: "440px",
     maxWidth: "100%",
@@ -574,71 +445,85 @@ const styles = {
     boxShadow: "0 20px 60px rgba(0, 0, 0, 0.2)",
     animation: "scaleIn 0.25s ease-out",
   },
-  modalHeader: {
-    padding: "16px 24px",
-    borderBottom: "1px solid #e2e8f0",
+  modalClose: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px",
+    borderRadius: "8px",
+    transition: "all 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+  },
+  
+  // Delete Modal styles
+  deleteModalHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    padding: "20px 24px 0 24px",
   },
-  modalTitle: {
-    margin: 0,
+  deleteIconContainer: {
+    width: "56px",
+    height: "56px",
+    borderRadius: "50%",
+    backgroundColor: "#fef2f2",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteIcon: {
+    color: "#dc2626",
+  },
+  deleteModalBody: {
+    padding: "16px 24px 24px 24px",
+    textAlign: "center",
+  },
+  deleteModalTitle: {
     fontSize: "18px",
     fontWeight: 600,
-    color: "#1e293b",
-    fontFamily: '"Poppins", "Inter", sans-serif',
+    margin: "0 0 12px 0",
   },
-  closeButton: {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer",
-    color: "#94a3b8",
-    padding: "0 4px",
-    transition: "color 0.2s ease",
-  },
-  modalBody: {
-    padding: "24px",
-  },
-  modalText: {
-    margin: "0 0 8px 0",
+  deleteModalText: {
     fontSize: "15px",
-    color: "#1e293b",
-    lineHeight: 1.5,
+    margin: "0 0 8px 0",
+    lineHeight: "1.6",
   },
-  modalSubText: {
-    margin: 0,
+  deleteModalSubtext: {
     fontSize: "13px",
-    color: "#64748b",
+    margin: 0,
   },
-  modalFooter: {
-    padding: "16px 24px",
-    borderTop: "1px solid #e2e8f0",
+  deleteModalFooter: {
     display: "flex",
     gap: "12px",
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    padding: "16px 24px 24px 24px",
   },
-  cancelButton: {
+  deleteCancelBtn: {
     padding: "10px 24px",
-    backgroundColor: "white",
-    color: "#475569",
     border: "1px solid #e2e8f0",
     borderRadius: "40px",
     cursor: "pointer",
-    fontWeight: 500,
     fontSize: "14px",
+    fontWeight: 500,
     transition: "all 0.2s ease",
+    minWidth: "100px",
   },
-  confirmButton: {
+  deleteConfirmBtn: {
     padding: "10px 24px",
     backgroundColor: "#dc2626",
     color: "white",
     border: "none",
     borderRadius: "40px",
     cursor: "pointer",
-    fontWeight: 500,
     fontSize: "14px",
+    fontWeight: 600,
     transition: "all 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    minWidth: "100px",
+    justifyContent: "center",
     boxShadow: "0 2px 8px rgba(220, 38, 38, 0.3)",
   },
 };
@@ -676,7 +561,7 @@ if (typeof document !== 'undefined') {
     
     /* Hover effects */
     .link:hover {
-      background-color: #f1f5f9 !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
       transform: translateX(4px);
     }
     
@@ -686,35 +571,27 @@ if (typeof document !== 'undefined') {
     }
     
     .button:hover {
-      background-color: #f1f5f9 !important;
-      color: #1e293b !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
+      color: var(--text-primary, #1e293b) !important;
     }
     
     .toggle:hover {
-      background-color: #f1f5f9 !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
       transform: scale(1.1);
     }
     
-    .cancel-button:hover {
-      background-color: #f8fafc !important;
+    .delete-cancel-btn:hover {
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
     
-    .confirm-button:hover {
+    .delete-confirm-btn:hover:not(:disabled) {
       background-color: #b91c1c !important;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
     }
     
-    .notification-item:hover {
-      background-color: #f8fafc;
-    }
-    
-    .close-button:hover {
-      color: #475569 !important;
-    }
-    
-    .close-dropdown:hover {
-      color: #475569 !important;
+    .modal-close:hover {
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
     
     /* Scrollbar personnalisée */
@@ -727,12 +604,12 @@ if (typeof document !== 'undefined') {
     }
     
     ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: var(--text-muted, #cbd5e1);
       border-radius: 4px;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
+      background: var(--text-secondary, #94a3b8);
     }
     
     /* Responsive */

@@ -76,4 +76,45 @@ class AuthController extends Controller
             'specialite' => $user->specialite,
         ]);
     }
+
+    /**
+     * Changer le mot de passe de l'utilisateur connecté
+     */
+    public function changePassword(Request $request)
+    {
+        Log::info('Tentative de changement de mot de passe', ['user_id' => $request->user()->id]);
+        
+        $request->validate([
+            'currentPassword' => 'required|string',
+            'newPassword' => 'required|string|min:6',
+        ]);
+
+        $user = $request->user();
+
+        // Vérifier que le mot de passe actuel est correct
+        if (!Hash::check($request->currentPassword, $user->password)) {
+            Log::warning('Échec changement de mot de passe - mot de passe actuel incorrect', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+            
+            throw ValidationException::withMessages([
+                'currentPassword' => ['Le mot de passe actuel est incorrect.'],
+            ]);
+        }
+
+        // Mettre à jour le mot de passe
+        $user->password = Hash::make($request->newPassword);
+        $user->save();
+
+        Log::info('Changement de mot de passe réussi', [
+            'user_id' => $user->id,
+            'email' => $user->email
+        ]);
+
+        return response()->json([
+            'message' => 'Mot de passe changé avec succès',
+            'success' => true
+        ]);
+    }
 }

@@ -1,22 +1,36 @@
-// src/pagesAdmin/AdminProfs.jsx - Version avec charte graphique
+// src/pagesAdmin/AdminProfs.jsx - Version avec mode sombre
 import { useState, useEffect } from 'react';
 import { profService } from '../services/api';
 import { 
   Plus, Edit2, Trash2, Search, Mail, User, AlertCircle, CheckCircle, 
-  GraduationCap, X, Filter, Users, Phone, BookOpen
+  GraduationCap, X, Filter, Users, Phone, BookOpen, Lock,
+  Eye, EyeOff, CheckCircle as CheckCircleIcon, XCircle, AlertTriangle,
+  Trash2 as TrashIcon
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AdminProfs() {
+  const { theme } = useTheme();
   const [profs, setProfs] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState({ show: false, type: '', message: '' });
-  const [form, setForm] = useState({ name: '', email: '', specialite: '', password: '', telephone: '' });
+  const [form, setForm] = useState({ name: '', email: '', specialite: '', password: '' });
   const [errors, setErrors] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [filterSpecialite, setFilterSpecialite] = useState('');
+  
+  // États pour la validation de l'email
+  const [emailStrength, setEmailStrength] = useState(0);
+  const [emailValid, setEmailValid] = useState(false);
+  const [isEmailTouched, setIsEmailTouched] = useState(false);
+
+  // États pour le modal de suppression
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [deleteName, setDeleteName] = useState('');
 
   useEffect(() => { loadProfs(); }, []);
 
@@ -38,11 +52,78 @@ export default function AdminProfs() {
     setTimeout(() => setNotification({ show: false, type: '', message: '' }), 4000); 
   };
 
+  // Fonction pour valider l'email et calculer le pourcentage
+  const validateAndCalculateStrength = (emailValue) => {
+    let strength = 0;
+    let valid = false;
+
+    const hasAt = emailValue.includes('@');
+    const hasDot = emailValue.includes('.');
+    const hasDotAfterAt = hasAt && emailValue.indexOf('.') > emailValue.indexOf('@');
+    const hasValidDomain = hasDotAfterAt && emailValue.split('.').pop().length >= 2;
+    const hasValidLocal = hasAt && emailValue.split('@')[0].length >= 1;
+
+    if (emailValue.length > 0) {
+      strength += 10;
+    }
+    if (hasAt) {
+      strength += 25;
+    }
+    if (hasDot) {
+      strength += 15;
+    }
+    if (hasDotAfterAt) {
+      strength += 25;
+    }
+    if (hasValidDomain) {
+      strength += 15;
+    }
+    if (hasValidLocal) {
+      strength += 10;
+    }
+
+    valid = hasAt && hasDot && hasDotAfterAt && hasValidDomain && hasValidLocal;
+
+    return { strength: Math.min(strength, 100), valid };
+  };
+
+  useEffect(() => {
+    if (form.email) {
+      const result = validateAndCalculateStrength(form.email);
+      setEmailStrength(result.strength);
+      setEmailValid(result.valid);
+    } else {
+      setEmailStrength(0);
+      setEmailValid(false);
+    }
+  }, [form.email]);
+
+  const handleEmailChange = (e) => {
+    setForm({...form, email: e.target.value});
+    setIsEmailTouched(true);
+  };
+
+  const getStrengthColor = () => {
+    if (emailStrength <= 30) return '#ef4444';
+    if (emailStrength <= 60) return '#f59e0b';
+    if (emailStrength <= 85) return '#3b82f6';
+    return '#10b981';
+  };
+
+  const getValidationMessage = () => {
+    if (!isEmailTouched || !form.email) return '';
+    if (emailValid) return { text: '✅ Email valide', color: '#10b981' };
+    if (form.email.length === 0) return { text: 'Veuillez saisir un email', color: '#94a3b8' };
+    return { text: '⚠️ Email invalide (ex: nom@domaine.com)', color: '#ef4444' };
+  };
+
+  const validationMessage = getValidationMessage();
+
   const validateForm = () => {
     const newErrors = {};
     if (!form.name?.trim()) newErrors.name = 'Le nom est requis';
     if (!form.email?.trim()) newErrors.email = 'L\'email est requis';
-    else if (!/\S+@\S+\.\S+/.test(form.email)) newErrors.email = 'Email invalide (ex: nom@domaine.com)';
+    else if (!emailValid) newErrors.email = 'Email invalide (ex: nom@domaine.com)';
     if (!editId && !form.password) newErrors.password = 'Mot de passe requis';
     else if (!editId && form.password.length < 6) newErrors.password = 'Minimum 6 caractères';
     setErrors(newErrors);
@@ -54,7 +135,7 @@ export default function AdminProfs() {
     setLoading(true);
     try {
       if (editId) {
-        const updateData = { name: form.name, email: form.email, specialite: form.specialite, telephone: form.telephone };
+        const updateData = { name: form.name, email: form.email, specialite: form.specialite };
         await profService.update(editId, updateData);
         showNotification('success', '✅ Professeur modifié avec succès');
       } else {
@@ -72,18 +153,27 @@ export default function AdminProfs() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('⚠️ Êtes-vous sûr de vouloir supprimer ce professeur ?')) {
-      setLoading(true);
-      try { 
-        await profService.delete(id); 
-        await loadProfs(); 
-        showNotification('success', '✅ Professeur supprimé avec succès'); 
-      } catch (error) { 
-        showNotification('error', 'Erreur lors de la suppression'); 
-      } finally { 
-        setLoading(false); 
-      }
+  // Ouvrir le modal de suppression
+  const openDeleteModal = (id, name) => {
+    setDeleteId(id);
+    setDeleteName(name);
+    setShowDeleteModal(true);
+  };
+
+  // Confirmer la suppression
+  const confirmDelete = async () => {
+    setLoading(true);
+    try { 
+      await profService.delete(deleteId); 
+      await loadProfs(); 
+      showNotification('success', '✅ Professeur supprimé avec succès'); 
+      setShowDeleteModal(false);
+      setDeleteId(null);
+      setDeleteName('');
+    } catch (error) { 
+      showNotification('error', 'Erreur lors de la suppression'); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
@@ -92,17 +182,20 @@ export default function AdminProfs() {
     setForm({ 
       name: prof.name, 
       email: prof.email, 
-      specialite: prof.specialite || '', 
-      telephone: prof.telephone || '',
+      specialite: prof.specialite || '',
       password: '' 
     }); 
+    setIsEmailTouched(true);
     setShowModal(true); 
   };
   
   const resetForm = () => { 
     setEditId(null); 
-    setForm({ name: '', email: '', specialite: '', password: '', telephone: '' }); 
-    setErrors({}); 
+    setForm({ name: '', email: '', specialite: '', password: '' }); 
+    setErrors({});
+    setIsEmailTouched(false);
+    setEmailStrength(0);
+    setEmailValid(false);
   };
 
   // Filtrer les professeurs
@@ -123,7 +216,11 @@ export default function AdminProfs() {
   const totalSpecialites = getUniqueSpecialites().length;
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      backgroundColor: 'var(--bg-primary, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
+    }}>
       {/* Notification */}
       {notification.show && (
         <div style={{
@@ -138,17 +235,23 @@ export default function AdminProfs() {
       {/* En-tête */}
       <div style={styles.headerSection}>
         <div>
-          <h1 style={styles.pageTitle}>👨‍🏫 Gestion des professeurs</h1>
-          <p style={styles.pageSubtitle}>Gérez les professeurs et leurs spécialités</p>
+          <h1 style={{
+            ...styles.pageTitle,
+            color: 'var(--text-primary, #1e293b)',
+          }}>👨‍🏫 Gestion des professeurs</h1>
+          <p style={{
+            ...styles.pageSubtitle,
+            color: 'var(--text-secondary, #64748b)',
+          }}>Gérez les professeurs et leurs spécialités</p>
         </div>
         <div style={styles.headerActions}>
           <button 
             onClick={() => setShowFilters(!showFilters)} 
             style={{
               ...styles.filterToggle,
-              backgroundColor: showFilters ? '#2563eb' : 'white',
-              color: showFilters ? 'white' : '#475569',
-              borderColor: showFilters ? '#2563eb' : '#e2e8f0'
+              backgroundColor: showFilters ? '#2563eb' : 'var(--bg-card, #ffffff)',
+              color: showFilters ? 'white' : 'var(--text-secondary, #475569)',
+              borderColor: showFilters ? '#2563eb' : 'var(--border-color, #e2e8f0)'
             }}
           >
             <Filter size={18} />
@@ -163,48 +266,94 @@ export default function AdminProfs() {
 
       {/* Statistiques */}
       <div style={styles.statsContainer}>
-        <div style={styles.statCard}>
+        <div style={{
+          ...styles.statCard,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
           <Users size={24} style={styles.statIcon} />
           <div>
-            <div style={styles.statValue}>{totalProfs}</div>
-            <div style={styles.statLabel}>Professeurs</div>
+            <div style={{
+              ...styles.statValue,
+              color: 'var(--text-primary, #1e293b)',
+            }}>{totalProfs}</div>
+            <div style={{
+              ...styles.statLabel,
+              color: 'var(--text-secondary, #64748b)',
+            }}>Professeurs</div>
           </div>
         </div>
-        <div style={styles.statCard}>
+        <div style={{
+          ...styles.statCard,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
           <BookOpen size={24} style={styles.statIcon} />
           <div>
-            <div style={styles.statValue}>{totalSpecialites}</div>
-            <div style={styles.statLabel}>Spécialités</div>
+            <div style={{
+              ...styles.statValue,
+              color: 'var(--text-primary, #1e293b)',
+            }}>{totalSpecialites}</div>
+            <div style={{
+              ...styles.statLabel,
+              color: 'var(--text-secondary, #64748b)',
+            }}>Spécialités</div>
           </div>
         </div>
       </div>
 
       {/* Barre de recherche et filtres */}
       <div style={styles.searchSection}>
-        <div style={styles.searchBar}>
+        <div style={{
+          ...styles.searchBar,
+          backgroundColor: 'var(--bg-card, #ffffff)',
+          borderColor: 'var(--border-color, #e2e8f0)',
+          boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+        }}>
           <Search size={18} style={styles.searchIcon} />
           <input 
             type="text" 
             placeholder="Rechercher par nom ou email..." 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
-            style={styles.searchInput} 
+            style={{
+              ...styles.searchInput,
+              backgroundColor: 'transparent',
+              color: 'var(--text-primary, #1e293b)',
+            }} 
           />
           {searchTerm && (
-            <button onClick={() => setSearchTerm('')} style={styles.clearSearch}>
+            <button onClick={() => setSearchTerm('')} style={{
+              ...styles.clearSearch,
+              color: 'var(--text-muted, #94a3b8)',
+            }}>
               <X size={16} />
             </button>
           )}
         </div>
 
         {showFilters && (
-          <div style={styles.filtersPanel}>
+          <div style={{
+            ...styles.filtersPanel,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+          }}>
             <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Spécialité</label>
+              <label style={{
+                ...styles.filterLabel,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Spécialité</label>
               <select 
                 value={filterSpecialite} 
                 onChange={(e) => setFilterSpecialite(e.target.value)} 
-                style={styles.filterSelect}
+                style={{
+                  ...styles.filterSelect,
+                  backgroundColor: 'var(--bg-input, #ffffff)',
+                  borderColor: 'var(--border-color, #e2e8f0)',
+                  color: 'var(--text-primary, #1e293b)',
+                }}
               >
                 <option value="">Toutes les spécialités</option>
                 {getUniqueSpecialites().map(s => (
@@ -214,7 +363,12 @@ export default function AdminProfs() {
             </div>
             <button 
               onClick={() => { setFilterSpecialite(''); setSearchTerm(''); }} 
-              style={styles.resetFiltersButton}
+              style={{
+                ...styles.resetFiltersButton,
+                backgroundColor: 'var(--bg-input, #f8fafc)',
+                borderColor: 'var(--border-color, #e2e8f0)',
+                color: 'var(--text-secondary, #475569)',
+              }}
             >
               Réinitialiser les filtres
             </button>
@@ -223,43 +377,91 @@ export default function AdminProfs() {
       </div>
 
       {/* Tableau des professeurs */}
-      <div style={styles.tableContainer}>
-        <div style={styles.tableHeader}>
-          <span style={styles.tableTitle}>Liste des professeurs</span>
-          <span style={styles.tableCount}>{filteredProfs.length} professeur(s)</span>
+      <div style={{
+        ...styles.tableContainer,
+        backgroundColor: 'var(--bg-card, #ffffff)',
+        borderColor: 'var(--border-color, #e2e8f0)',
+        boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
+      }}>
+        <div style={{
+          ...styles.tableHeader,
+          backgroundColor: 'var(--bg-input, #f8fafc)',
+          borderBottom: '1px solid var(--border-color, #e2e8f0)',
+        }}>
+          <span style={{
+            ...styles.tableTitle,
+            color: 'var(--text-primary, #1e293b)',
+          }}>Liste des professeurs</span>
+          <span style={{
+            ...styles.tableCount,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+            color: 'var(--text-secondary, #64748b)',
+          }}>{filteredProfs.length} professeur(s)</span>
         </div>
         
         {loading && filteredProfs.length === 0 ? (
           <div style={styles.loadingContainer}>
             <div style={styles.spinner} />
-            <p>Chargement des professeurs...</p>
+            <p style={{ color: 'var(--text-secondary, #64748b)' }}>Chargement des professeurs...</p>
           </div>
         ) : (
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Professeur</th>
-                <th style={styles.th}>Email</th>
-                <th style={styles.th}>Spécialité</th>
-                <th style={styles.th}>Téléphone</th>
-                <th style={styles.th}>Actions</th>
+                <th style={{
+                  ...styles.th,
+                  color: 'var(--text-secondary, #64748b)',
+                  borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                  backgroundColor: 'var(--bg-input, #fafafa)',
+                }}>Professeur</th>
+                <th style={{
+                  ...styles.th,
+                  color: 'var(--text-secondary, #64748b)',
+                  borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                  backgroundColor: 'var(--bg-input, #fafafa)',
+                }}>Email</th>
+                <th style={{
+                  ...styles.th,
+                  color: 'var(--text-secondary, #64748b)',
+                  borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                  backgroundColor: 'var(--bg-input, #fafafa)',
+                }}>Spécialité</th>
+                <th style={{
+                  ...styles.th,
+                  color: 'var(--text-secondary, #64748b)',
+                  borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                  backgroundColor: 'var(--bg-input, #fafafa)',
+                }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredProfs.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={styles.emptyRow}>
+                  <td colSpan="4" style={styles.emptyRow}>
                     <div style={styles.emptyState}>
                       <Users size={48} style={styles.emptyIcon} />
-                      <p style={styles.emptyText}>Aucun professeur trouvé</p>
-                      <p style={styles.emptySubtext}>Ajoutez votre premier professeur en cliquant sur "Ajouter"</p>
+                      <p style={{
+                        ...styles.emptyText,
+                        color: 'var(--text-primary, #1e293b)',
+                      }}>Aucun professeur trouvé</p>
+                      <p style={{
+                        ...styles.emptySubtext,
+                        color: 'var(--text-muted, #94a3b8)',
+                      }}>Ajoutez votre premier professeur en cliquant sur "Ajouter"</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 filteredProfs.map(p => (
-                  <tr key={p.id} style={styles.tr}>
-                    <td style={styles.td}>
+                  <tr key={p.id} style={{
+                    ...styles.tr,
+                    borderBottom: '1px solid var(--border-color, #f1f5f9)',
+                  }}>
+                    <td style={{
+                      ...styles.td,
+                      color: 'var(--text-primary, #1e293b)',
+                    }}>
                       <div style={styles.profNameContainer}>
                         <div style={styles.avatar}>
                           {p.name?.charAt(0).toUpperCase() || 'P'}
@@ -267,38 +469,55 @@ export default function AdminProfs() {
                         <span style={styles.profName}>{p.name}</span>
                       </div>
                     </td>
-                    <td style={styles.td}>
+                    <td style={{
+                      ...styles.td,
+                      color: 'var(--text-primary, #1e293b)',
+                    }}>
                       <div style={styles.emailContainer}>
                         <Mail size={14} style={styles.emailIcon} />
                         <span>{p.email}</span>
                       </div>
                     </td>
-                    <td style={styles.td}>
+                    <td style={{
+                      ...styles.td,
+                      color: 'var(--text-primary, #1e293b)',
+                    }}>
                       {p.specialite ? (
-                        <span style={styles.specialiteBadge}>{p.specialite}</span>
+                        <span style={{
+                          ...styles.specialiteBadge,
+                          backgroundColor: 'var(--bg-input, #eff6ff)',
+                          color: '#2563eb',
+                        }}>{p.specialite}</span>
                       ) : (
-                        <span style={styles.emptyBadge}>—</span>
+                        <span style={{
+                          ...styles.emptyBadge,
+                          color: 'var(--text-muted, #94a3b8)',
+                        }}>—</span>
                       )}
                     </td>
-                    <td style={styles.td}>
-                      {p.telephone ? (
-                        <span style={styles.phoneText}>{p.telephone}</span>
-                      ) : (
-                        <span style={styles.emptyBadge}>—</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
+                    <td style={{
+                      ...styles.td,
+                      color: 'var(--text-primary, #1e293b)',
+                    }}>
                       <div style={styles.actionsContainer}>
                         <button 
                           onClick={() => handleEdit(p)} 
-                          style={styles.editBtn}
+                          style={{
+                            ...styles.editBtn,
+                            backgroundColor: 'var(--bg-input, #eff6ff)',
+                            color: '#2563eb',
+                          }}
                           title="Modifier"
                         >
                           <Edit2 size={16} />
                         </button>
                         <button 
-                          onClick={() => handleDelete(p.id)} 
-                          style={styles.deleteBtn}
+                          onClick={() => openDeleteModal(p.id, p.name)} 
+                          style={{
+                            ...styles.deleteBtn,
+                            backgroundColor: 'var(--bg-input, #fef2f2)',
+                            color: '#dc2626',
+                          }}
                           title="Supprimer"
                         >
                           <Trash2 size={16} />
@@ -313,24 +532,41 @@ export default function AdminProfs() {
         )}
       </div>
 
-      {/* Modal d'ajout/modification */}
+      {/* Modal d'ajout/modification avec étoiles rouges */}
       {showModal && (
         <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            boxShadow: '0 20px 60px var(--shadow-color, rgba(0,0,0,0.2))',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              ...styles.modalHeader,
+              borderBottom: '1px solid var(--border-color, #e2e8f0)',
+            }}>
+              <h3 style={{
+                ...styles.modalTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>
                 {editId ? '✏️ Modifier le professeur' : '➕ Ajouter un professeur'}
               </h3>
-              <button onClick={() => setShowModal(false)} style={styles.modalClose}>
+              <button onClick={() => setShowModal(false)} style={{
+                ...styles.modalClose,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
                 <X size={20} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
+              {/* Champ Nom */}
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <User size={16} style={styles.formIcon} />
-                  Nom complet *
+                  Nom complet <span style={styles.requiredStar}>*</span>
                 </label>
                 <input 
                   type="text" 
@@ -339,32 +575,96 @@ export default function AdminProfs() {
                   onChange={e => setForm({...form, name: e.target.value})} 
                   style={{
                     ...styles.input,
-                    borderColor: errors.name ? '#ef4444' : '#e2e8f0'
+                    backgroundColor: 'var(--bg-input, #f8fafc)',
+                    borderColor: errors.name ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                    color: 'var(--text-primary, #1e293b)',
                   }} 
                 />
                 {errors.name && <div style={styles.fieldError}>{errors.name}</div>}
               </div>
 
+              {/* Champ Email avec validation en temps réel */}
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <Mail size={16} style={styles.formIcon} />
-                  Email *
+                  Email <span style={styles.requiredStar}>*</span>
                 </label>
-                <input 
-                  type="email" 
-                  placeholder="Ex: jean.dupont@eni.mg" 
-                  value={form.email} 
-                  onChange={e => setForm({...form, email: e.target.value})} 
-                  style={{
-                    ...styles.input,
-                    borderColor: errors.email ? '#ef4444' : '#e2e8f0'
-                  }} 
-                />
+                <div style={styles.inputWrapper}>
+                  <input 
+                    type="email" 
+                    placeholder="Ex: jean.dupont@eni.mg" 
+                    value={form.email} 
+                    onChange={handleEmailChange}
+                    onBlur={() => setIsEmailTouched(true)}
+                    style={{
+                      ...styles.input,
+                      backgroundColor: 'var(--bg-input, #f8fafc)',
+                      borderColor: emailValid && isEmailTouched && form.email ? '#10b981' : 
+                                  !emailValid && isEmailTouched && form.email ? '#ef4444' : 
+                                  'var(--border-color, #e2e8f0)',
+                      color: 'var(--text-primary, #1e293b)',
+                    }} 
+                  />
+                  {isEmailTouched && form.email && (
+                    <div style={styles.validationIcon}>
+                      {emailValid ? (
+                        <CheckCircleIcon size={18} color="#10b981" />
+                      ) : (
+                        <XCircle size={18} color="#ef4444" />
+                      )}
+                    </div>
+                  )}
+                </div>
                 {errors.email && <div style={styles.fieldError}>{errors.email}</div>}
+                
+                {/* Barre de progression du pourcentage */}
+                {isEmailTouched && form.email && (
+                  <div style={styles.strengthContainer}>
+                    <div style={{
+                      ...styles.strengthBarBackground,
+                      backgroundColor: 'var(--bg-input, #f1f5f9)',
+                    }}>
+                      <div 
+                        style={{
+                          ...styles.strengthBarFill,
+                          width: `${emailStrength}%`,
+                          backgroundColor: getStrengthColor(),
+                          transition: 'width 0.3s ease-in-out, background-color 0.3s ease'
+                        }}
+                      />
+                    </div>
+                    <div style={styles.strengthInfo}>
+                      <span style={{ 
+                        fontSize: '12px', 
+                        color: getStrengthColor(),
+                        fontWeight: 600
+                      }}>
+                        {emailStrength}%
+                      </span>
+                      {validationMessage && (
+                        <span style={{
+                          fontSize: '12px',
+                          color: validationMessage.color,
+                          marginLeft: '8px',
+                          fontWeight: 500
+                        }}>
+                          {validationMessage.text}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Champ Spécialité */}
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
+                <label style={{
+                  ...styles.formLabel,
+                  color: 'var(--text-primary, #1e293b)',
+                }}>
                   <BookOpen size={16} style={styles.formIcon} />
                   Spécialité
                 </label>
@@ -373,29 +673,24 @@ export default function AdminProfs() {
                   placeholder="Ex: Génie Logiciel" 
                   value={form.specialite} 
                   onChange={e => setForm({...form, specialite: e.target.value})} 
-                  style={styles.input} 
+                  style={{
+                    ...styles.input,
+                    backgroundColor: 'var(--bg-input, #f8fafc)',
+                    borderColor: 'var(--border-color, #e2e8f0)',
+                    color: 'var(--text-primary, #1e293b)',
+                  }} 
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
-                  <Phone size={16} style={styles.formIcon} />
-                  Téléphone
-                </label>
-                <input 
-                  type="tel" 
-                  placeholder="Ex: 034 00 000 00" 
-                  value={form.telephone} 
-                  onChange={e => setForm({...form, telephone: e.target.value})} 
-                  style={styles.input} 
-                />
-              </div>
-
+              {/* Champ Mot de passe (uniquement pour ajout) */}
               {!editId && (
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>
+                  <label style={{
+                    ...styles.formLabel,
+                    color: 'var(--text-primary, #1e293b)',
+                  }}>
                     <Lock size={16} style={styles.formIcon} />
-                    Mot de passe *
+                    Mot de passe <span style={styles.requiredStar}>*</span>
                   </label>
                   <input 
                     type="password" 
@@ -404,7 +699,9 @@ export default function AdminProfs() {
                     onChange={e => setForm({...form, password: e.target.value})} 
                     style={{
                       ...styles.input,
-                      borderColor: errors.password ? '#ef4444' : '#e2e8f0'
+                      backgroundColor: 'var(--bg-input, #f8fafc)',
+                      borderColor: errors.password ? '#ef4444' : 'var(--border-color, #e2e8f0)',
+                      color: 'var(--text-primary, #1e293b)',
                     }} 
                   />
                   {errors.password && <div style={styles.fieldError}>{errors.password}</div>}
@@ -412,8 +709,16 @@ export default function AdminProfs() {
               )}
             </div>
 
-            <div style={styles.modalFooter}>
-              <button onClick={() => setShowModal(false)} style={styles.cancelBtn}>
+            <div style={{
+              ...styles.modalFooter,
+              borderTop: '1px solid var(--border-color, #e2e8f0)',
+            }}>
+              <button onClick={() => setShowModal(false)} style={{
+                ...styles.cancelBtn,
+                backgroundColor: 'var(--bg-card, #ffffff)',
+                borderColor: 'var(--border-color, #e2e8f0)',
+                color: 'var(--text-secondary, #475569)',
+              }}>
                 Annuler
               </button>
               <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
@@ -430,18 +735,91 @@ export default function AdminProfs() {
           </div>
         </div>
       )}
+
+      {/* Modal de suppression personnalisé */}
+      {showDeleteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: 'var(--bg-card, #ffffff)',
+            boxShadow: '0 20px 60px var(--shadow-color, rgba(0,0,0,0.2))',
+            maxWidth: '420px',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={styles.deleteModalHeader}>
+              <div style={styles.deleteIconContainer}>
+                <AlertTriangle size={32} style={styles.deleteIcon} />
+              </div>
+              <button onClick={() => setShowDeleteModal(false)} style={{
+                ...styles.modalClose,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={styles.deleteModalBody}>
+              <h3 style={{
+                ...styles.deleteModalTitle,
+                color: 'var(--text-primary, #1e293b)',
+              }}>Confirmer la suppression</h3>
+              <p style={{
+                ...styles.deleteModalText,
+                color: 'var(--text-secondary, #475569)',
+              }}>
+                Êtes-vous sûr de vouloir supprimer le professeur <strong style={{ color: 'var(--text-primary, #1e293b)' }}>"{deleteName}"</strong> ?
+              </p>
+              <p style={{
+                ...styles.deleteModalSubtext,
+                color: 'var(--text-muted, #94a3b8)',
+              }}>
+                Cette action est irréversible et supprimera définitivement toutes les données associées.
+              </p>
+            </div>
+
+            <div style={styles.deleteModalFooter}>
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                style={{
+                  ...styles.deleteCancelBtn,
+                  backgroundColor: 'var(--bg-card, #ffffff)',
+                  borderColor: 'var(--border-color, #e2e8f0)',
+                  color: 'var(--text-secondary, #475569)',
+                }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={confirmDelete} 
+                style={styles.deleteConfirmBtn}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div style={styles.spinnerSmall} />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <TrashIcon size={16} />
+                    Supprimer
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Styles avec charte graphique
+// Styles avec charte graphique et variables CSS
 const styles = {
   container: {
     padding: '24px 32px',
     maxWidth: '1200px',
     margin: '0 auto',
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-    backgroundColor: '#f8fafc',
     minHeight: '100vh',
   },
 
@@ -477,13 +855,11 @@ const styles = {
   pageTitle: {
     fontSize: '28px',
     fontWeight: 700,
-    color: '#1e293b',
     margin: 0,
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
   pageSubtitle: {
     fontSize: '14px',
-    color: '#64748b',
     margin: '4px 0 0',
   },
   headerActions: {
@@ -501,8 +877,6 @@ const styles = {
     fontWeight: 500,
     fontSize: '14px',
     transition: 'all 0.2s ease',
-    backgroundColor: 'white',
-    color: '#475569',
   },
   addButton: {
     display: 'flex',
@@ -532,7 +906,6 @@ const styles = {
     alignItems: 'center',
     gap: '16px',
     padding: '16px 20px',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -543,11 +916,9 @@ const styles = {
   statValue: {
     fontSize: '24px',
     fontWeight: 700,
-    color: '#1e293b',
   },
   statLabel: {
     fontSize: '13px',
-    color: '#64748b',
     fontWeight: 500,
   },
 
@@ -557,7 +928,6 @@ const styles = {
   },
   searchBar: {
     position: 'relative',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -576,8 +946,6 @@ const styles = {
     borderRadius: '12px',
     fontSize: '14px',
     outline: 'none',
-    backgroundColor: 'transparent',
-    color: '#1e293b',
   },
   clearSearch: {
     position: 'absolute',
@@ -587,7 +955,6 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#94a3b8',
     padding: '4px',
     borderRadius: '50%',
     transition: 'all 0.2s ease',
@@ -600,7 +967,6 @@ const styles = {
     gap: '16px',
     marginTop: '16px',
     padding: '16px',
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     flexWrap: 'wrap',
@@ -613,7 +979,6 @@ const styles = {
     display: 'block',
     fontSize: '13px',
     fontWeight: 500,
-    color: '#1e293b',
     marginBottom: '6px',
   },
   filterSelect: {
@@ -622,27 +987,22 @@ const styles = {
     border: '1px solid #e2e8f0',
     borderRadius: '8px',
     fontSize: '14px',
-    backgroundColor: 'white',
-    color: '#1e293b',
     outline: 'none',
     transition: 'all 0.2s ease',
   },
   resetFiltersButton: {
     padding: '10px 20px',
-    backgroundColor: '#f8fafc',
     border: '1px solid #e2e8f0',
     borderRadius: '40px',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 500,
-    color: '#475569',
     transition: 'all 0.2s ease',
     whiteSpace: 'nowrap',
   },
 
   // Table
   tableContainer: {
-    backgroundColor: 'white',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
     overflow: 'hidden',
@@ -653,19 +1013,15 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '16px 20px',
-    backgroundColor: '#f8fafc',
     borderBottom: '1px solid #e2e8f0',
   },
   tableTitle: {
     fontSize: '16px',
     fontWeight: 600,
-    color: '#1e293b',
   },
   tableCount: {
     fontSize: '13px',
-    color: '#64748b',
     padding: '4px 12px',
-    backgroundColor: 'white',
     borderRadius: '20px',
     border: '1px solid #e2e8f0',
   },
@@ -678,11 +1034,9 @@ const styles = {
     padding: '12px 20px',
     fontSize: '12px',
     fontWeight: 600,
-    color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     borderBottom: '1px solid #e2e8f0',
-    backgroundColor: '#fafafa',
   },
   tr: {
     transition: 'all 0.2s ease',
@@ -691,7 +1045,6 @@ const styles = {
   td: {
     padding: '12px 20px',
     fontSize: '14px',
-    color: '#1e293b',
     verticalAlign: 'middle',
   },
 
@@ -733,18 +1086,12 @@ const styles = {
   specialiteBadge: {
     display: 'inline-block',
     padding: '4px 12px',
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
   },
   emptyBadge: {
-    color: '#94a3b8',
     fontSize: '13px',
-  },
-  phoneText: {
-    color: '#475569',
   },
 
   // Actions
@@ -754,8 +1101,6 @@ const styles = {
   },
   editBtn: {
     padding: '6px 10px',
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
     border: 'none',
     borderRadius: '8px',
     cursor: 'pointer',
@@ -765,8 +1110,6 @@ const styles = {
   },
   deleteBtn: {
     padding: '6px 10px',
-    backgroundColor: '#fef2f2',
-    color: '#dc2626',
     border: 'none',
     borderRadius: '8px',
     cursor: 'pointer',
@@ -790,12 +1133,10 @@ const styles = {
   emptyText: {
     fontSize: '18px',
     fontWeight: 600,
-    color: '#1e293b',
     marginBottom: '8px',
   },
   emptySubtext: {
     fontSize: '14px',
-    color: '#94a3b8',
   },
 
   // Loading
@@ -824,7 +1165,7 @@ const styles = {
     animation: 'spin 0.8s linear infinite',
   },
 
-  // Modal
+  // Modal principal
   modalOverlay: {
     position: 'fixed',
     inset: 0,
@@ -837,7 +1178,6 @@ const styles = {
     padding: '20px',
   },
   modalContent: {
-    backgroundColor: 'white',
     borderRadius: '16px',
     width: '520px',
     maxWidth: '100%',
@@ -856,7 +1196,6 @@ const styles = {
   modalTitle: {
     fontSize: '20px',
     fontWeight: 600,
-    color: '#1e293b',
     margin: 0,
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
@@ -864,7 +1203,6 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#94a3b8',
     padding: '4px',
     borderRadius: '8px',
     transition: 'all 0.2s ease',
@@ -893,11 +1231,18 @@ const styles = {
     gap: '8px',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#1e293b',
     marginBottom: '6px',
+  },
+  requiredStar: {
+    color: '#ef4444',
+    fontWeight: 700,
+    fontSize: '16px',
   },
   formIcon: {
     color: '#2563eb',
+  },
+  inputWrapper: {
+    position: 'relative',
   },
   input: {
     width: '100%',
@@ -908,7 +1253,36 @@ const styles = {
     boxSizing: 'border-box',
     transition: 'all 0.2s ease',
     outline: 'none',
-    backgroundColor: '#f8fafc',
+  },
+  validationIcon: {
+    position: 'absolute',
+    right: '12px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  strengthContainer: {
+    marginTop: '8px',
+  },
+  strengthBarBackground: {
+    width: '100%',
+    height: '6px',
+    borderRadius: '4px',
+    overflow: 'hidden',
+  },
+  strengthBarFill: {
+    height: '100%',
+    borderRadius: '4px',
+    transition: 'width 0.3s ease-in-out',
+    position: 'relative',
+  },
+  strengthInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: '4px',
   },
   fieldError: {
     fontSize: '12px',
@@ -922,10 +1296,8 @@ const styles = {
   // Buttons
   cancelBtn: {
     padding: '10px 24px',
-    backgroundColor: 'white',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
     borderRadius: '40px',
+    border: '1px solid #e2e8f0',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: 500,
@@ -933,7 +1305,75 @@ const styles = {
   },
   saveBtn: {
     padding: '10px 24px',
+    borderRadius: '40px',
+    border: 'none',
     backgroundColor: '#2563eb',
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  // Delete Modal
+  deleteModalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px 24px 0 24px',
+  },
+  deleteIconContainer: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: '#fef2f2',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteIcon: {
+    color: '#dc2626',
+  },
+  deleteModalBody: {
+    padding: '16px 24px 24px 24px',
+    textAlign: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: '0 0 12px 0',
+  },
+  deleteModalText: {
+    fontSize: '15px',
+    margin: '0 0 8px 0',
+    lineHeight: '1.6',
+  },
+  deleteModalSubtext: {
+    fontSize: '13px',
+    margin: 0,
+  },
+  deleteModalFooter: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'center',
+    padding: '16px 24px 24px 24px',
+  },
+  deleteCancelBtn: {
+    padding: '10px 24px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '40px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    transition: 'all 0.2s ease',
+    minWidth: '100px',
+  },
+  deleteConfirmBtn: {
+    padding: '10px 24px',
+    backgroundColor: '#dc2626',
     color: 'white',
     border: 'none',
     borderRadius: '40px',
@@ -944,6 +1384,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    minWidth: '100px',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
   },
 };
 
@@ -988,16 +1431,16 @@ if (typeof document !== 'undefined') {
     }
 
     .reset-filters-button:hover {
-      background-color: #e2e8f0;
+      background-color: var(--hover-bg, #e2e8f0) !important;
     }
 
     .edit-btn:hover {
-      background-color: #dbeafe;
+      background-color: #dbeafe !important;
       transform: scale(1.05);
     }
 
     .delete-btn:hover {
-      background-color: #fecaca;
+      background-color: #fecaca !important;
       transform: scale(1.05);
     }
 
@@ -1008,36 +1451,45 @@ if (typeof document !== 'undefined') {
     }
 
     .cancel-btn:hover {
-      background-color: #f8fafc;
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
 
     .modal-close:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
 
     .clear-search:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
 
     .input:focus {
-      border-color: #2563eb;
+      border-color: #2563eb !important;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      background-color: white;
     }
 
     .filter-select:focus {
-      border-color: #2563eb;
+      border-color: #2563eb !important;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
     .tr:hover {
-      background-color: #f8fafc;
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
 
     .stat-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.08));
       transition: all 0.2s ease;
+    }
+
+    .delete-cancel-btn:hover {
+      background-color: var(--hover-bg, #f8fafc) !important;
+    }
+
+    .delete-confirm-btn:hover:not(:disabled) {
+      background-color: #b91c1c !important;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
     }
 
     /* Scrollbar */
@@ -1050,12 +1502,12 @@ if (typeof document !== 'undefined') {
     }
     
     .modal-body::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: var(--text-muted, #cbd5e1);
       border-radius: 4px;
     }
     
     .modal-body::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
+      background: var(--text-secondary, #94a3b8);
     }
 
     @media (max-width: 768px) {
@@ -1090,7 +1542,7 @@ if (typeof document !== 'undefined') {
       }
       
       .table {
-        min-width: 600px;
+        min-width: 500px;
       }
     }
   `;

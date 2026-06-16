@@ -1,4 +1,4 @@
-// src/pagesAdmin/AdminParametre.jsx - Version avec charte graphique
+// src/pagesAdmin/AdminParametre.jsx
 import { useState, useEffect } from 'react';
 import {
   Save, Bell, Lock, Palette, Globe, Moon, Sun, Monitor,
@@ -6,13 +6,18 @@ import {
   Database, RefreshCw, Download, Upload, Trash2, X,
   Settings, LogOut, Clock, Wifi, Server, HardDrive
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AdminParametre() {
+  const { user, changePassword, updateUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: false,
     dailyDigest: true,
-    theme: 'light',
+    theme: theme || 'light',
     compactMode: false,
     twoFactorAuth: false,
     sessionTimeout: 30,
@@ -35,17 +40,30 @@ export default function AdminParametre() {
   const [passwordErrors, setPasswordErrors] = useState({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // Charger les paramètres sauvegardés
   useEffect(() => {
     loadSettings();
   }, []);
 
+  // Mettre à jour le thème quand il change
+  useEffect(() => {
+    if (settings.theme !== theme) {
+      toggleTheme(settings.theme);
+    }
+  }, [settings.theme]);
+
   const loadSettings = () => {
     try {
       const savedSettings = localStorage.getItem('adminSettings');
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        const parsed = JSON.parse(savedSettings);
+        setSettings(prev => ({
+          ...prev,
+          ...parsed,
+          theme: theme || parsed.theme || 'light'
+        }));
       }
     } catch (error) {
       console.error('Erreur chargement paramètres:', error);
@@ -85,16 +103,26 @@ export default function AdminParametre() {
     setSaved(false);
     setSaveError(false);
     
+    // Si le thème change, appliquer immédiatement
+    if (key === 'theme') {
+      toggleTheme(value);
+    }
+    
     // Sauvegarde automatique si activée
     if (settings.autoSave) {
       saveSettingsToStorage(newSettings);
+      setSaved(true);
+      setSaveMessage('Paramètres sauvegardés automatiquement');
+      setTimeout(() => {
+        setSaved(false);
+        setSaveMessage('');
+      }, 2000);
     }
   };
 
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Simuler un appel API
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const success = saveSettingsToStorage(settings);
@@ -120,32 +148,40 @@ export default function AdminParametre() {
     }
   };
 
-  const handlePasswordChange = (e) => {
+  const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (!validatePasswordForm()) return;
     
-    // Simuler changement de mot de passe
-    console.log('Mot de passe changé');
-    setShowPasswordModal(false);
-    setPasswordData({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    });
-    setPasswordErrors({});
-    
-    // Feedback de succès
-    setSaved(true);
-    setSaveMessage('Mot de passe changé avec succès !');
-    setTimeout(() => {
-      setSaved(false);
-      setSaveMessage('');
-    }, 3000);
+    setPasswordLoading(true);
+    try {
+      // Appel API pour changer le mot de passe
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      
+      setShowPasswordModal(false);
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setPasswordErrors({});
+      
+      setSaved(true);
+      setSaveMessage('Mot de passe changé avec succès !');
+      setTimeout(() => {
+        setSaved(false);
+        setSaveMessage('');
+      }, 3000);
+    } catch (error) {
+      setPasswordErrors({ 
+        currentPassword: error.response?.data?.message || 'Mot de passe actuel incorrect' 
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleDataAction = (action) => {
     setShowConfirmModal(true);
-    // Stocker l'action pour la confirmation
     window.pendingAction = action;
   };
 
@@ -172,6 +208,7 @@ export default function AdminParametre() {
     try {
       const data = {
         settings: settings,
+        user: { name: user?.name, email: user?.email },
         timestamp: new Date().toISOString(),
         version: '1.0.0'
       };
@@ -216,6 +253,9 @@ export default function AdminParametre() {
           if (data.settings) {
             setSettings(data.settings);
             saveSettingsToStorage(data.settings);
+            if (data.settings.theme) {
+              toggleTheme(data.settings.theme);
+            }
             setSaved(true);
             setSaveMessage('Données importées avec succès !');
             setTimeout(() => {
@@ -241,7 +281,7 @@ export default function AdminParametre() {
     try {
       localStorage.removeItem('adminSettings');
       // Réinitialiser aux valeurs par défaut
-      setSettings({
+      const defaultSettings = {
         emailNotifications: true,
         pushNotifications: false,
         dailyDigest: true,
@@ -252,7 +292,11 @@ export default function AdminParametre() {
         language: 'fr',
         autoSave: true,
         showTips: true
-      });
+      };
+      setSettings(defaultSettings);
+      saveSettingsToStorage(defaultSettings);
+      toggleTheme('light');
+      
       setSaved(true);
       setSaveMessage('Données supprimées avec succès !');
       setTimeout(() => {
@@ -386,9 +430,9 @@ export default function AdminParametre() {
                   onClick={() => handleChange("theme", "light")}
                   style={{
                     ...styles.themeButton,
-                    backgroundColor: settings.theme === "light" ? '#2563eb' : '#f8fafc',
-                    color: settings.theme === "light" ? 'white' : '#475569',
-                    borderColor: settings.theme === "light" ? '#2563eb' : '#e2e8f0'
+                    backgroundColor: settings.theme === "light" ? '#2563eb' : 'var(--bg-input, #f8fafc)',
+                    color: settings.theme === "light" ? 'white' : 'var(--text-secondary, #475569)',
+                    borderColor: settings.theme === "light" ? '#2563eb' : 'var(--border-color, #e2e8f0)'
                   }}
                 >
                   <Sun size={18} />
@@ -398,9 +442,9 @@ export default function AdminParametre() {
                   onClick={() => handleChange("theme", "dark")}
                   style={{
                     ...styles.themeButton,
-                    backgroundColor: settings.theme === "dark" ? '#2563eb' : '#f8fafc',
-                    color: settings.theme === "dark" ? 'white' : '#475569',
-                    borderColor: settings.theme === "dark" ? '#2563eb' : '#e2e8f0'
+                    backgroundColor: settings.theme === "dark" ? '#2563eb' : 'var(--bg-input, #f8fafc)',
+                    color: settings.theme === "dark" ? 'white' : 'var(--text-secondary, #475569)',
+                    borderColor: settings.theme === "dark" ? '#2563eb' : 'var(--border-color, #e2e8f0)'
                   }}
                 >
                   <Moon size={18} />
@@ -410,9 +454,9 @@ export default function AdminParametre() {
                   onClick={() => handleChange("theme", "system")}
                   style={{
                     ...styles.themeButton,
-                    backgroundColor: settings.theme === "system" ? '#2563eb' : '#f8fafc',
-                    color: settings.theme === "system" ? 'white' : '#475569',
-                    borderColor: settings.theme === "system" ? '#2563eb' : '#e2e8f0'
+                    backgroundColor: settings.theme === "system" ? '#2563eb' : 'var(--bg-input, #f8fafc)',
+                    color: settings.theme === "system" ? 'white' : 'var(--text-secondary, #475569)',
+                    borderColor: settings.theme === "system" ? '#2563eb' : 'var(--border-color, #e2e8f0)'
                   }}
                 >
                   <Monitor size={18} />
@@ -602,6 +646,11 @@ export default function AdminParametre() {
               <span style={styles.systemLabel}>Statut:</span>
               <span style={{...styles.systemValue, color: '#10b981'}}>Connecté</span>
             </div>
+            <div style={styles.systemItem}>
+              <User size={16} style={styles.systemIcon} />
+              <span style={styles.systemLabel}>Utilisateur:</span>
+              <span style={styles.systemValue}>{user?.name || 'Administrateur'}</span>
+            </div>
           </div>
         </div>
 
@@ -634,7 +683,7 @@ export default function AdminParametre() {
                       onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
                       style={{
                         ...styles.input,
-                        borderColor: passwordErrors.currentPassword ? '#ef4444' : '#e2e8f0'
+                        borderColor: passwordErrors.currentPassword ? '#ef4444' : 'var(--border-color, #e2e8f0)'
                       }}
                       placeholder="Entrez votre mot de passe actuel"
                       required
@@ -661,7 +710,7 @@ export default function AdminParametre() {
                       onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
                       style={{
                         ...styles.input,
-                        borderColor: passwordErrors.newPassword ? '#ef4444' : '#e2e8f0'
+                        borderColor: passwordErrors.newPassword ? '#ef4444' : 'var(--border-color, #e2e8f0)'
                       }}
                       placeholder="Minimum 6 caractères"
                       required
@@ -687,7 +736,7 @@ export default function AdminParametre() {
                     onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
                     style={{
                       ...styles.input,
-                      borderColor: passwordErrors.confirmPassword ? '#ef4444' : '#e2e8f0'
+                      borderColor: passwordErrors.confirmPassword ? '#ef4444' : 'var(--border-color, #e2e8f0)'
                     }}
                     placeholder="Confirmez votre nouveau mot de passe"
                     required
@@ -702,8 +751,8 @@ export default function AdminParametre() {
                 <button type="button" onClick={() => setShowPasswordModal(false)} style={styles.cancelButton}>
                   Annuler
                 </button>
-                <button type="submit" style={styles.confirmButton}>
-                  Changer
+                <button type="submit" style={styles.confirmButton} disabled={passwordLoading}>
+                  {passwordLoading ? 'Changement...' : 'Changer'}
                 </button>
               </div>
             </form>
@@ -740,14 +789,16 @@ export default function AdminParametre() {
   );
 }
 
+// Styles avec variables CSS pour le thème
 const styles = {
   container: {
     padding: '24px 32px',
     maxWidth: '900px',
     margin: '0 auto',
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'var(--bg-primary, #f8fafc)',
     minHeight: '100vh',
+    color: 'var(--text-primary, #1e293b)',
   },
 
   // Header
@@ -762,13 +813,13 @@ const styles = {
   pageTitle: {
     fontSize: '28px',
     fontWeight: 700,
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     margin: 0,
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
   pageSubtitle: {
     fontSize: '14px',
-    color: '#64748b',
+    color: 'var(--text-secondary, #64748b)',
     margin: '4px 0 0',
   },
   saveHeaderButton: {
@@ -822,11 +873,11 @@ const styles = {
 
   // Section
   section: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-card, #ffffff)',
     borderRadius: '16px',
     padding: '24px',
-    border: '1px solid #e2e8f0',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    border: '1px solid var(--border-color, #e2e8f0)',
+    boxShadow: '0 1px 3px var(--shadow-color, rgba(0,0,0,0.05))',
   },
   sectionHeader: {
     display: 'flex',
@@ -834,7 +885,7 @@ const styles = {
     gap: '14px',
     marginBottom: '20px',
     paddingBottom: '16px',
-    borderBottom: '2px solid #f1f5f9',
+    borderBottom: '2px solid var(--border-color, #f1f5f9)',
   },
   sectionIcon: {
     color: '#2563eb',
@@ -842,12 +893,12 @@ const styles = {
   sectionTitle: {
     fontSize: '18px',
     fontWeight: 600,
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     margin: 0,
   },
   sectionDesc: {
     fontSize: '13px',
-    color: '#64748b',
+    color: 'var(--text-secondary, #64748b)',
     margin: '2px 0 0 0',
   },
 
@@ -870,12 +921,12 @@ const styles = {
   },
   labelTitle: {
     fontWeight: 500,
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     fontSize: '14px',
   },
   labelDesc: {
     fontSize: '12px',
-    color: '#64748b',
+    color: 'var(--text-secondary, #64748b)',
     marginTop: '2px',
   },
   switchContainer: {
@@ -929,27 +980,27 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '10px 20px',
-    border: '2px solid #e2e8f0',
+    border: '2px solid var(--border-color, #e2e8f0)',
     borderRadius: '10px',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     fontWeight: 500,
     fontSize: '14px',
-    backgroundColor: '#f8fafc',
-    color: '#475569',
+    backgroundColor: 'var(--bg-input, #f8fafc)',
+    color: 'var(--text-secondary, #475569)',
   },
 
   // Select
   select: {
     width: '100%',
     padding: '10px 14px',
-    border: '1px solid #e2e8f0',
+    border: '1px solid var(--border-color, #e2e8f0)',
     borderRadius: '8px',
     fontSize: '14px',
     marginTop: '8px',
     cursor: 'pointer',
-    backgroundColor: 'white',
-    color: '#1e293b',
+    backgroundColor: 'var(--bg-input, #ffffff)',
+    color: 'var(--text-primary, #1e293b)',
     outline: 'none',
     transition: 'all 0.2s ease',
   },
@@ -960,13 +1011,13 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     padding: '12px 20px',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e2e8f0',
+    backgroundColor: 'var(--bg-input, #f8fafc)',
+    border: '1px solid var(--border-color, #e2e8f0)',
     borderRadius: '10px',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#475569',
+    color: 'var(--text-secondary, #475569)',
     transition: 'all 0.2s ease',
     width: 'fit-content',
   },
@@ -982,13 +1033,13 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '10px 18px',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e2e8f0',
+    backgroundColor: 'var(--bg-input, #f8fafc)',
+    border: '1px solid var(--border-color, #e2e8f0)',
     borderRadius: '10px',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#475569',
+    color: 'var(--text-secondary, #475569)',
     transition: 'all 0.2s ease',
   },
 
@@ -1003,7 +1054,7 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '8px 12px',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'var(--bg-input, #f8fafc)',
     borderRadius: '8px',
   },
   systemIcon: {
@@ -1011,12 +1062,12 @@ const styles = {
   },
   systemLabel: {
     fontSize: '13px',
-    color: '#64748b',
+    color: 'var(--text-secondary, #64748b)',
     fontWeight: 500,
   },
   systemValue: {
     fontSize: '13px',
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     fontWeight: 500,
   },
 
@@ -1055,7 +1106,7 @@ const styles = {
     padding: '20px',
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-card, #ffffff)',
     borderRadius: '16px',
     width: '100%',
     maxWidth: '480px',
@@ -1069,12 +1120,12 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '20px 24px',
-    borderBottom: '1px solid #e2e8f0',
+    borderBottom: '1px solid var(--border-color, #e2e8f0)',
   },
   modalTitle: {
     fontSize: '18px',
     fontWeight: 600,
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     margin: 0,
   },
   modalClose: {
@@ -1097,7 +1148,7 @@ const styles = {
     gap: '12px',
     justifyContent: 'flex-end',
     padding: '16px 24px',
-    borderTop: '1px solid #e2e8f0',
+    borderTop: '1px solid var(--border-color, #e2e8f0)',
   },
 
   // Form
@@ -1108,19 +1159,20 @@ const styles = {
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     marginBottom: '6px',
   },
   input: {
     width: '100%',
     padding: '10px 14px',
-    border: '1px solid #e2e8f0',
+    border: '1px solid var(--border-color, #e2e8f0)',
     borderRadius: '8px',
     fontSize: '14px',
     boxSizing: 'border-box',
     transition: 'all 0.2s ease',
     outline: 'none',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'var(--bg-input, #f8fafc)',
+    color: 'var(--text-primary, #1e293b)',
   },
   passwordInputWrapper: {
     position: 'relative',
@@ -1147,21 +1199,21 @@ const styles = {
   // Confirm
   confirmText: {
     fontSize: '16px',
-    color: '#1e293b',
+    color: 'var(--text-primary, #1e293b)',
     margin: 0,
   },
   confirmSubtext: {
     fontSize: '14px',
-    color: '#64748b',
+    color: 'var(--text-secondary, #64748b)',
     margin: '8px 0 0',
   },
 
   // Buttons
   cancelButton: {
     padding: '10px 24px',
-    backgroundColor: 'white',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
+    backgroundColor: 'transparent',
+    color: 'var(--text-secondary, #475569)',
+    border: '1px solid var(--border-color, #e2e8f0)',
     borderRadius: '40px',
     cursor: 'pointer',
     fontSize: '14px',
@@ -1225,17 +1277,17 @@ if (typeof document !== 'undefined') {
     }
 
     .password-button:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9);
       transform: translateX(4px);
     }
 
     .data-button:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9);
       transform: translateY(-2px);
     }
 
     .cancel-button:hover {
-      background-color: #f8fafc;
+      background-color: var(--hover-bg, #f8fafc);
     }
 
     .confirm-button:hover:not(:disabled) {
@@ -1245,21 +1297,20 @@ if (typeof document !== 'undefined') {
     }
 
     .modal-close:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9);
     }
 
     .password-toggle:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9);
     }
 
     .switch-label:hover {
-      background-color: #f8fafc;
+      background-color: var(--bg-input, #f8fafc);
     }
 
     .input:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      background-color: white;
     }
 
     .select:focus {
@@ -1268,7 +1319,7 @@ if (typeof document !== 'undefined') {
     }
 
     .system-item:hover {
-      background-color: #f1f5f9;
+      background-color: var(--hover-bg, #f1f5f9);
       transition: background 0.2s ease;
     }
 
