@@ -1,30 +1,258 @@
-// src/components/NavbarProf.jsx - Version avec charte graphique
+// src/components/NavbarProf.jsx
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { 
-  LayoutDashboard, Calendar, Clock, LogOut, Menu, X, BookOpen, Bell,
-  ChevronLeft, ChevronRight, User, Settings, HelpCircle
+  LayoutDashboard, Calendar, Clock, LogOut, BookOpen, Bell,
+  ChevronLeft, ChevronRight, User, Settings, HelpCircle, CheckCircle,
+  AlertCircle, Info, RefreshCw, X, AlertTriangle
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { edtService } from "../services/api";
 
 export default function NavbarProf({ children }) {
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications] = useState([
-    { id: 1, message: "Nouveau cours ajouté", date: "2024-01-15", read: false, type: "success" },
-    { id: 2, message: "Modification de l'emploi du temps", date: "2024-01-14", read: false, type: "info" },
-    { id: 3, message: "Rappel: Réunion pédagogique", date: "2024-01-13", read: true, type: "warning" }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  const isDark = theme === 'dark';
 
   const menu = [
     { path: "/prof/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
     { path: "/prof/disponibilites", label: "Mes disponibilités", icon: Clock },
     { path: "/prof/emploi", label: "Emploi du temps", icon: Calendar }
   ];
+
+  // Charger les notifications au montage
+  useEffect(() => {
+    if (user?.id) {
+      loadNotifications();
+    }
+  }, [user]);
+
+  // Vérifier les nouvelles notifications périodiquement
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (user?.id) {
+        loadNotifications();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const loadNotifications = async () => {
+    if (!user?.id) return;
+
+    setLoadingNotifications(true);
+    try {
+      const storageKey = `profNotifications_${user.id}`;
+      let storedNotifications = [];
+      
+      try {
+        const storedData = localStorage.getItem(storageKey);
+        if (storedData) {
+          storedNotifications = JSON.parse(storedData);
+        }
+      } catch (e) {
+        storedNotifications = [];
+      }
+
+      let globalNotifications = [];
+      try {
+        const globalData = localStorage.getItem('profNotifications');
+        if (globalData) {
+          globalNotifications = JSON.parse(globalData);
+        }
+      } catch (e) {
+        globalNotifications = [];
+      }
+
+      let allNotifications = [...storedNotifications];
+      
+      globalNotifications.forEach(globalNotif => {
+        const exists = allNotifications.some(n => 
+          n.id === globalNotif.id || 
+          (n.courseId === globalNotif.courseId && n.type === globalNotif.type)
+        );
+        if (!exists) {
+          if (!globalNotif.profId || globalNotif.profId === user.id) {
+            allNotifications.push(globalNotif);
+          }
+        }
+      });
+
+      try {
+        const response = await edtService.getMySchedule();
+        const courses = response.data || [];
+        const today = new Date();
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+
+        courses.forEach(course => {
+          const courseDate = new Date(course.date || course.createdAt || Date.now());
+          
+          if (courseDate > weekAgo && courseDate <= today) {
+            const isNew = !allNotifications.some(n => 
+              n.type === 'new_course' && n.courseId === course.id
+            );
+            if (isNew) {
+              const newNotif = {
+                id: `course_${course.id}_${Date.now()}`,
+                type: 'new_course',
+                message: `📚 Nouveau cours ajouté: ${course.matiere || course.nom || 'Cours'}`,
+                date: courseDate.toLocaleDateString('fr-FR', { 
+                  day: 'numeric', 
+                  month: 'short', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }),
+                read: false,
+                icon: 'check-circle',
+                color: '#10b981',
+                courseId: course.id,
+                profId: user.id,
+                courseName: course.matiere || course.nom || 'Cours'
+              };
+              allNotifications.unshift(newNotif);
+            }
+          }
+        });
+      } catch (apiError) {
+        console.error('Erreur récupération cours API:', apiError);
+      }
+
+      const edtModified = localStorage.getItem('edtLastModified');
+      if (edtModified) {
+        const lastModified = new Date(edtModified);
+        const isRecent = (today - lastModified) < 24 * 60 * 60 * 1000;
+        
+        if (isRecent) {
+          const hasModifNotification = allNotifications.some(n => 
+            n.type === 'edt_modification' && 
+            new Date(n.timestamp || 0) > lastModified
+          );
+          if (!hasModifNotification) {
+            const modifNotif = {
+              id: `edt_modif_${Date.now()}`,
+              type: 'edt_modification',
+              message: '🔄 Modification de l\'emploi du temps',
+              date: lastModified.toLocaleDateString('fr-FR', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }),
+              read: false,
+              icon: 'alert-circle',
+              color: '#f59e0b',
+              profId: user.id,
+              timestamp: lastModified.toISOString()
+            };
+            allNotifications.unshift(modifNotif);
+          }
+        }
+      }
+
+      const seenIds = new Set();
+      const uniqueNotifications = allNotifications.filter(n => {
+        const key = n.courseId ? `${n.type}_${n.courseId}` : `${n.type}_${n.id}`;
+        if (seenIds.has(key)) return false;
+        seenIds.add(key);
+        return true;
+      });
+
+      uniqueNotifications.sort((a, b) => {
+        const dateA = new Date(a.date || a.timestamp || 0);
+        const dateB = new Date(b.date || b.timestamp || 0);
+        return dateB - dateA;
+      });
+
+      const limitedNotifications = uniqueNotifications.slice(0, 50);
+      
+      setNotifications(limitedNotifications);
+      
+      const unread = limitedNotifications.filter(n => !n.read).length;
+      setUnreadCount(unread);
+      setNotificationCount(limitedNotifications.length);
+
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(limitedNotifications));
+      } catch (e) {
+        console.error('Erreur sauvegarde localStorage:', e);
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des notifications:', error);
+      try {
+        const storageKey = `profNotifications_${user.id}`;
+        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        setNotifications(stored);
+        setUnreadCount(stored.filter(n => !n.read).length);
+        setNotificationCount(stored.length);
+      } catch (e) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setNotificationCount(0);
+      }
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  const markAsRead = (notificationId) => {
+    const updated = notifications.map(n => 
+      n.id === notificationId ? { ...n, read: true } : n
+    );
+    setNotifications(updated);
+    setUnreadCount(updated.filter(n => !n.read).length);
+    if (user?.id) {
+      localStorage.setItem(`profNotifications_${user.id}`, JSON.stringify(updated));
+    }
+    localStorage.setItem('profNotifications', JSON.stringify(updated));
+  };
+
+  const markAllAsRead = () => {
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    setNotifications(updated);
+    setUnreadCount(0);
+    if (user?.id) {
+      localStorage.setItem(`profNotifications_${user.id}`, JSON.stringify(updated));
+    }
+    localStorage.setItem('profNotifications', JSON.stringify(updated));
+  };
+
+  const deleteNotification = (notificationId) => {
+    const updated = notifications.filter(n => n.id !== notificationId);
+    setNotifications(updated);
+    setUnreadCount(updated.filter(n => !n.read).length);
+    if (user?.id) {
+      localStorage.setItem(`profNotifications_${user.id}`, JSON.stringify(updated));
+    }
+    localStorage.setItem('profNotifications', JSON.stringify(updated));
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+    setUnreadCount(0);
+    if (user?.id) {
+      localStorage.setItem(`profNotifications_${user.id}`, JSON.stringify([]));
+    }
+    localStorage.removeItem('profNotifications');
+  };
+
+  const refreshNotifications = () => {
+    loadNotifications();
+  };
 
   useEffect(() => {
     const handleEscape = (e) => { 
@@ -34,7 +262,6 @@ export default function NavbarProf({ children }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [showConfirmModal]);
 
-  // Fermer les notifications en cliquant en dehors
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (showNotifications && !e.target.closest('.notifications-container')) {
@@ -49,31 +276,65 @@ export default function NavbarProf({ children }) {
     await logout(); 
     navigate("/"); 
   };
-  
-  const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Obtenir l'icône de notification
-  const getNotificationIcon = (type) => {
-    switch(type) {
-      case 'success': return <div style={styles.notifDotSuccess} />;
-      case 'info': return <div style={styles.notifDotInfo} />;
-      case 'warning': return <div style={styles.notifDotWarning} />;
-      default: return <div style={styles.notifDotDefault} />;
+  const getNotificationIcon = (notification) => {
+    switch(notification.icon || notification.type) {
+      case 'check-circle':
+      case 'new_course':
+        return <CheckCircle size={16} color="#10b981" />;
+      case 'alert-circle':
+      case 'edt_modification':
+        return <AlertCircle size={16} color="#f59e0b" />;
+      case 'info':
+        return <Info size={16} color="#3b82f6" />;
+      default:
+        return <Bell size={16} color="#64748b" />;
     }
   };
 
+  const getNotificationBg = (notification) => {
+    if (notification.read) return 'transparent';
+    switch(notification.icon || notification.type) {
+      case 'check-circle':
+      case 'new_course':
+        return '#f0fdf4';
+      case 'alert-circle':
+      case 'edt_modification':
+        return '#fffbeb';
+      case 'info':
+        return '#eff6ff';
+      default:
+        return 'transparent';
+    }
+  };
+
+  const isCourseNotification = (notification) => {
+    return notification.type === 'new_course' || notification.courseId;
+  };
+
   return (
-    <div style={styles.page}>
+    <div style={{
+      ...styles.page,
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+      color: isDark ? '#f1f5f9' : '#1e293b',
+    }}>
       {/* SIDEBAR */}
       <div style={{ 
-        ...styles.sidebar, 
+        ...styles.sidebar,
+        backgroundColor: isDark ? '#1e293b' : '#ffffff',
+        borderRight: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
         width: sidebarOpen ? 280 : 80,
         boxShadow: sidebarOpen 
-          ? '2px 0 20px rgba(0, 0, 0, 0.08)' 
-          : '2px 0 10px rgba(0, 0, 0, 0.05)'
+          ? `2px 0 20px ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0, 0, 0, 0.08)'}` 
+          : `2px 0 10px ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0, 0, 0, 0.05)'}`
       }}>
         <button 
-          style={styles.toggle} 
+          style={{
+            ...styles.toggle,
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            borderColor: isDark ? '#475569' : '#e2e8f0',
+            color: isDark ? '#94a3b8' : '#475569',
+          }}
           onClick={() => setSidebarOpen(!sidebarOpen)}
           aria-label={sidebarOpen ? "Réduire le menu" : "Agrandir le menu"}
         >
@@ -81,27 +342,45 @@ export default function NavbarProf({ children }) {
         </button>
 
         {/* LOGO */}
-        <div style={styles.logo}>
+        <div style={{
+          ...styles.logo,
+          borderBottom: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+        }}>
           <div style={styles.logoIcon}>
             <BookOpen size={sidebarOpen ? 32 : 28} color="#059669" />
           </div>
           {sidebarOpen && (
             <div style={styles.logoText}>
-              <b style={styles.logoTitle}>ENI Prof</b>
-              <small style={styles.logoSubtitle}>Espace enseignant</small>
+              <b style={{
+                ...styles.logoTitle,
+                color: isDark ? '#f1f5f9' : '#1e293b',
+              }}>ENI Prof</b>
+              <small style={{
+                ...styles.logoSubtitle,
+                color: isDark ? '#94a3b8' : '#64748b',
+              }}>Espace enseignant</small>
             </div>
           )}
         </div>
 
         {/* USER INFO */}
-        <div style={styles.user}>
+        <div style={{
+          ...styles.user,
+          borderBottom: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+        }}>
           <div style={styles.avatar}>
             {user?.name?.charAt(0) || user?.nom?.charAt(0) || "P"}
           </div>
           {sidebarOpen && (
             <div style={styles.userInfo}>
-              <b style={styles.userName}>{user?.name || user?.nom || "Professeur"}</b>
-              <small style={styles.userRole}>Professeur</small>
+              <b style={{
+                ...styles.userName,
+                color: isDark ? '#f1f5f9' : '#1e293b',
+              }}>{user?.name || user?.nom || "Professeur"}</b>
+              <small style={{
+                ...styles.userRole,
+                color: isDark ? '#94a3b8' : '#64748b',
+              }}>Professeur</small>
             </div>
           )}
         </div>
@@ -118,7 +397,7 @@ export default function NavbarProf({ children }) {
                 style={{ 
                   ...styles.link, 
                   backgroundColor: isActive ? '#059669' : 'transparent', 
-                  color: isActive ? 'white' : '#475569',
+                  color: isActive ? 'white' : (isDark ? '#94a3b8' : '#475569'),
                   justifyContent: sidebarOpen ? 'flex-start' : 'center',
                   padding: sidebarOpen ? '12px 16px' : '12px',
                   borderRadius: sidebarOpen ? '12px' : '10px',
@@ -135,74 +414,207 @@ export default function NavbarProf({ children }) {
         </nav>
 
         {/* BOTTOM ACTIONS */}
-        <div style={styles.bottom}>
+        <div style={{
+          ...styles.bottom,
+          borderTop: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+        }}>
           <div style={{ position: 'relative', width: '100%' }} className="notifications-container">
             <button 
-              style={styles.button} 
+              style={{
+                ...styles.button,
+                position: 'relative',
+                color: isDark ? '#94a3b8' : '#475569',
+              }}
               onClick={() => setShowNotifications(!showNotifications)}
               aria-label="Notifications"
             >
-              <Bell size={20} />
-              {sidebarOpen && <span>Notifications</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Bell size={20} />
+                {sidebarOpen && <span>Notifications</span>}
+              </div>
               {unreadCount > 0 && (
                 <span style={styles.badge} aria-label={`${unreadCount} notifications non lues`}>
-                  {unreadCount}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
             
             {showNotifications && (
-              <div style={styles.notificationsDropdown} role="dialog" aria-label="Notifications">
-                <div style={styles.notificationsHeader}>
-                  <span style={styles.notificationsTitle}>Notifications</span>
-                  <button 
-                    onClick={() => setShowNotifications(false)} 
-                    style={styles.closeDropdown}
-                    aria-label="Fermer les notifications"
-                  >
-                    ×
-                  </button>
+              <div style={{
+                ...styles.notificationsDropdown,
+                backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                borderColor: isDark ? '#334155' : '#e2e8f0',
+                boxShadow: `0 10px 40px ${isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0, 0, 0, 0.15)'}`,
+              }} role="dialog" aria-label="Notifications">
+                <div style={{
+                  ...styles.notificationsHeader,
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+                }}>
+                  <div style={styles.notificationsHeaderLeft}>
+                    <span style={{
+                      ...styles.notificationsTitle,
+                      color: isDark ? '#f1f5f9' : '#1e293b',
+                    }}>🔔 Notifications</span>
+                    {unreadCount > 0 && (
+                      <span style={styles.unreadBadge}>{unreadCount} non lue(s)</span>
+                    )}
+                    <span style={styles.totalBadge}>{notificationCount} total</span>
+                  </div>
+                  <div style={styles.notificationsHeaderRight}>
+                    <button 
+                      onClick={refreshNotifications} 
+                      style={styles.refreshBtn}
+                      aria-label="Rafraîchir"
+                      disabled={loadingNotifications}
+                    >
+                      <RefreshCw size={14} className={loadingNotifications ? 'spin' : ''} />
+                    </button>
+                    {notifications.length > 0 && (
+                      <>
+                        <button 
+                          onClick={markAllAsRead} 
+                          style={styles.markAllRead}
+                          aria-label="Marquer toutes comme lues"
+                        >
+                          Tout lire
+                        </button>
+                        <button 
+                          onClick={clearAllNotifications} 
+                          style={styles.clearAll}
+                          aria-label="Effacer toutes les notifications"
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                    <button 
+                      onClick={() => setShowNotifications(false)} 
+                      style={styles.closeDropdown}
+                      aria-label="Fermer les notifications"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 <div style={styles.notificationsList}>
-                  {notifications.length === 0 ? (
-                    <div style={styles.noNotifications}>Aucune notification</div>
+                  {loadingNotifications ? (
+                    <div style={styles.loadingNotifications}>
+                      <div style={styles.spinnerSmall} />
+                      <span>Chargement des notifications...</span>
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div style={styles.noNotifications}>
+                      <Bell size={32} color="#cbd5e1" />
+                      <p style={{ fontWeight: 500, color: isDark ? '#94a3b8' : '#475569' }}>Aucune notification</p>
+                      <small style={{ color: isDark ? '#64748b' : '#94a3b8' }}>
+                        Vous serez informé des nouveaux cours et modifications
+                      </small>
+                    </div>
                   ) : (
                     notifications.map(n => (
-                      <div key={n.id} style={styles.notificationItem}>
-                        {getNotificationIcon(n.type)}
+                      <div 
+                        key={n.id} 
+                        style={{
+                          ...styles.notificationItem,
+                          backgroundColor: getNotificationBg(n),
+                          opacity: n.read ? 0.7 : 1,
+                          borderLeft: !n.read ? `3px solid ${n.color || '#059669'}` : '3px solid transparent',
+                          borderBottom: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+                        }}
+                        onClick={() => markAsRead(n.id)}
+                      >
+                        <div style={styles.notificationIconWrapper}>
+                          {getNotificationIcon(n)}
+                        </div>
                         <div style={styles.notificationContent}>
-                          <div style={styles.notificationMessage}>{n.message}</div>
-                          <small style={styles.notificationDate}>{n.date}</small>
+                          <div style={{
+                            ...styles.notificationMessage,
+                            color: isDark ? '#f1f5f9' : '#1e293b',
+                          }}>{n.message}</div>
+                          <div style={styles.notificationMeta}>
+                            <span style={styles.notificationDate}>
+                              {n.date || n.timestamp || 'Récemment'}
+                            </span>
+                            {isCourseNotification(n) && (
+                              <span style={styles.notificationTag}>📚 Cours</span>
+                            )}
+                            {n.type === 'edt_modification' && (
+                              <span style={{...styles.notificationTag, backgroundColor: '#fffbeb', color: '#d97706'}}>
+                                🔄 Modification
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {!n.read && <div style={styles.notificationUnread} />}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNotification(n.id);
+                          }}
+                          style={styles.deleteNotification}
+                          aria-label="Supprimer la notification"
+                        >
+                          ×
+                        </button>
                       </div>
                     ))
                   )}
                 </div>
+                {notifications.length > 0 && (
+                  <div style={{
+                    ...styles.notificationsFooter,
+                    borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+                  }}>
+                    <button 
+                      onClick={clearAllNotifications} 
+                      style={styles.clearAllBtn}
+                    >
+                      Effacer toutes les notifications
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          <button 
-            style={styles.button} 
-            onClick={() => navigate("/prof/parametres")}
-            aria-label="Paramètres"
-          >
-            <Settings size={20} />
-            {sidebarOpen && <span>Paramètres</span>}
-          </button>
+          {/* Lien vers Paramètres */}
+          <Link to="/prof/parametres" style={{ textDecoration: 'none', width: '100%' }}>
+            <button 
+              style={{
+                ...styles.button,
+                backgroundColor: location.pathname === '/prof/parametres' ? (isDark ? '#334155' : '#f1f5f9') : 'transparent',
+                color: location.pathname === '/prof/parametres' ? '#059669' : (isDark ? '#94a3b8' : '#475569'),
+              }}
+              aria-label="Paramètres"
+            >
+              <Settings size={20} />
+              {sidebarOpen && <span>Paramètres</span>}
+            </button>
+          </Link>
           
-          <button 
-            style={styles.button} 
-            onClick={() => navigate("/prof/aide")}
-            aria-label="Aide"
-          >
-            <HelpCircle size={20} />
-            {sidebarOpen && <span>Aide</span>}
-          </button>
+          {/* Lien vers Aide */}
+          <Link to="/prof/aide" style={{ textDecoration: 'none', width: '100%' }}>
+            <button 
+              style={{
+                ...styles.button,
+                backgroundColor: location.pathname === '/prof/aide' ? (isDark ? '#334155' : '#f1f5f9') : 'transparent',
+                color: location.pathname === '/prof/aide' ? '#059669' : (isDark ? '#94a3b8' : '#475569'),
+              }}
+              aria-label="Aide"
+            >
+              <HelpCircle size={20} />
+              {sidebarOpen && <span>Aide</span>}
+            </button>
+          </Link>
 
+          {/* Bouton Déconnexion */}
           <button 
-            style={{ ...styles.button, color: '#dc2626' }} 
+            style={{ 
+              ...styles.button, 
+              color: '#dc2626',
+              backgroundColor: location.pathname === '/prof/logout' ? (isDark ? '#334155' : '#f1f5f9') : 'transparent',
+            }}
             onClick={() => setShowConfirmModal(true)}
             aria-label="Déconnexion"
           >
@@ -221,13 +633,14 @@ export default function NavbarProf({ children }) {
           padding: "30px", 
           boxSizing: "border-box", 
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", 
-          backgroundColor: "#f8fafc" 
+          backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+          color: isDark ? '#f1f5f9' : '#1e293b',
         }}
       >
         {children}
       </main>
 
-      {/* MODAL DE CONFIRMATION */}
+      {/* MODAL DE CONFIRMATION - Version moderne identique à NavbarAdmin */}
       {showConfirmModal && (
         <div 
           style={styles.modalOverlay} 
@@ -235,36 +648,75 @@ export default function NavbarProf({ children }) {
           role="dialog" 
           aria-modal="true"
           aria-labelledby="modal-title"
+          onClick={() => setShowConfirmModal(false)}
         >
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 id="modal-title" style={styles.modalTitle}>Confirmation de déconnexion</h3>
-              <button 
-                style={styles.closeButton} 
-                onClick={() => setShowConfirmModal(false)}
-                aria-label="Fermer"
-              >
-                ×
-              </button>
-            </div>
-            <div style={styles.modalBody}>
-              <p style={styles.modalText}>Êtes-vous sûr de vouloir vous déconnecter ?</p>
-              <p style={styles.modalSubText}>Vous devrez vous reconnecter pour accéder à votre espace.</p>
-            </div>
-            <div style={styles.modalFooter}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            boxShadow: `0 20px 60px ${isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0, 0, 0, 0.2)'}`,
+            maxWidth: "420px",
+          }} onClick={e => e.stopPropagation()}>
+            {/* Header avec icône d'avertissement */}
+            <div style={styles.deleteModalHeader}>
+              <div style={{
+                ...styles.deleteIconContainer,
+                backgroundColor: isDark ? '#2d1b1b' : '#fef2f2',
+              }}>
+                <AlertTriangle size={32} style={styles.deleteIcon} />
+              </div>
               <button 
                 onClick={() => setShowConfirmModal(false)} 
-                style={styles.cancelButton}
+                style={{
+                  ...styles.modalClose,
+                  color: isDark ? '#94a3b8' : '#94a3b8',
+                }}
+                aria-label="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {/* Corps du modal */}
+            <div style={styles.deleteModalBody}>
+              <h3 style={{
+                ...styles.deleteModalTitle,
+                color: isDark ? '#f1f5f9' : '#1e293b',
+              }}>Confirmation de déconnexion</h3>
+              <p style={{
+                ...styles.deleteModalText,
+                color: isDark ? '#94a3b8' : '#475569',
+              }}>
+                Êtes-vous sûr de vouloir vous déconnecter ?
+              </p>
+              <p style={{
+                ...styles.deleteModalSubtext,
+                color: isDark ? '#64748b' : '#94a3b8',
+              }}>
+                Vous devrez vous reconnecter pour accéder à votre espace.
+              </p>
+            </div>
+
+            {/* Footer avec boutons */}
+            <div style={styles.deleteModalFooter}>
+              <button 
+                onClick={() => setShowConfirmModal(false)} 
+                style={{
+                  ...styles.deleteCancelBtn,
+                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                  borderColor: isDark ? '#475569' : '#e2e8f0',
+                  color: isDark ? '#f1f5f9' : '#475569',
+                }}
                 aria-label="Annuler la déconnexion"
               >
                 Annuler
               </button>
               <button 
                 onClick={handleLogout} 
-                style={styles.confirmButton}
+                style={styles.deleteConfirmBtn}
                 aria-label="Confirmer la déconnexion"
               >
-                Oui, me déconnecter
+                <LogOut size={16} />
+                Se déconnecter
               </button>
             </div>
           </div>
@@ -277,18 +729,15 @@ export default function NavbarProf({ children }) {
 const styles = {
   page: { 
     minHeight: "100vh", 
-    backgroundColor: "#f8fafc",
     fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
+    transition: 'all 0.3s ease',
   },
   
-  // Sidebar - Charte graphique
   sidebar: {
     position: "fixed",
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: "white",
-    boxShadow: "2px 0 20px rgba(0, 0, 0, 0.08)",
     display: "flex",
     flexDirection: "column",
     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -304,14 +753,12 @@ const styles = {
     height: 28,
     borderRadius: "50%",
     border: "2px solid #e2e8f0",
-    backgroundColor: "white",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1001,
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-    color: "#475569",
     transition: "all 0.2s ease",
     padding: 0,
   },
@@ -321,7 +768,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    borderBottom: "1px solid #f1f5f9",
     minHeight: "80px",
   },
   logoIcon: {
@@ -338,12 +784,10 @@ const styles = {
   logoTitle: {
     fontSize: "18px",
     fontWeight: 700,
-    color: "#1e293b",
     fontFamily: '"Poppins", "Inter", sans-serif',
   },
   logoSubtitle: {
     fontSize: "11px",
-    color: "#64748b",
     fontWeight: 400,
   },
   
@@ -352,7 +796,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    borderBottom: "1px solid #f1f5f9",
   },
   avatar: {
     width: 45,
@@ -377,14 +820,12 @@ const styles = {
   userName: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#1e293b",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   userRole: {
     fontSize: "11px",
-    color: "#64748b",
     fontWeight: 400,
   },
   
@@ -414,7 +855,6 @@ const styles = {
   
   bottom: {
     padding: "16px 12px",
-    borderTop: "1px solid #f1f5f9",
     display: "flex",
     flexDirection: "column",
     gap: "4px",
@@ -432,7 +872,6 @@ const styles = {
     transition: "all 0.2s ease",
     fontWeight: 500,
     fontSize: "14px",
-    color: "#475569",
     position: "relative",
     textAlign: "left",
   },
@@ -445,24 +884,23 @@ const styles = {
     backgroundColor: "#dc2626",
     color: "white",
     borderRadius: "50%",
-    width: "20px",
+    minWidth: "20px",
     height: "20px",
     fontSize: "10px",
     fontWeight: 600,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    padding: "0 4px",
   },
   
-  // Notifications
   notificationsDropdown: {
     position: "absolute",
     bottom: "calc(100% + 8px)",
     left: 0,
-    width: "320px",
-    backgroundColor: "white",
+    width: "400px",
+    maxWidth: "calc(100vw - 20px)",
     borderRadius: "12px",
-    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.12)",
     border: "1px solid #e2e8f0",
     zIndex: 1002,
     overflow: "hidden",
@@ -473,25 +911,81 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px 16px",
-    backgroundColor: "#f8fafc",
     borderBottom: "1px solid #e2e8f0",
+  },
+  notificationsHeaderLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  notificationsHeaderRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
   },
   notificationsTitle: {
     fontWeight: 600,
-    color: "#1e293b",
     fontSize: "14px",
+  },
+  unreadBadge: {
+    fontSize: "11px",
+    color: "#059669",
+    fontWeight: 500,
+    backgroundColor: "#d1fae5",
+    padding: "2px 8px",
+    borderRadius: "12px",
+  },
+  totalBadge: {
+    fontSize: "11px",
+    color: "#64748b",
+    fontWeight: 400,
+    backgroundColor: "#f1f5f9",
+    padding: "2px 8px",
+    borderRadius: "12px",
+  },
+  refreshBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#94a3b8",
+    padding: "4px",
+    borderRadius: "4px",
+    transition: "all 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markAllRead: {
+    background: "none",
+    border: "none",
+    fontSize: "11px",
+    cursor: "pointer",
+    color: "#2563eb",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    transition: "all 0.2s ease",
+    fontWeight: 500,
+  },
+  clearAll: {
+    background: "none",
+    border: "none",
+    fontSize: "16px",
+    cursor: "pointer",
+    color: "#94a3b8",
+    padding: "0 4px",
+    transition: "color 0.2s ease",
   },
   closeDropdown: {
     background: "none",
     border: "none",
-    fontSize: "20px",
+    fontSize: "16px",
     cursor: "pointer",
     color: "#94a3b8",
     padding: "0 4px",
     transition: "color 0.2s ease",
   },
   notificationsList: {
-    maxHeight: "300px",
+    maxHeight: "350px",
     overflowY: "auto",
   },
   notificationItem: {
@@ -499,21 +993,40 @@ const styles = {
     alignItems: "flex-start",
     gap: "12px",
     padding: "12px 16px",
-    borderBottom: "1px solid #f1f5f9",
-    transition: "background 0.2s ease",
+    transition: "all 0.2s ease",
     position: "relative",
+    cursor: "pointer",
+  },
+  notificationIconWrapper: {
+    marginTop: "2px",
+    flexShrink: 0,
   },
   notificationContent: {
     flex: 1,
+    minWidth: 0,
   },
   notificationMessage: {
     fontSize: "13px",
-    color: "#1e293b",
     marginBottom: "4px",
+    lineHeight: 1.4,
+  },
+  notificationMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
   },
   notificationDate: {
     fontSize: "11px",
     color: "#94a3b8",
+  },
+  notificationTag: {
+    fontSize: "10px",
+    color: "#2563eb",
+    backgroundColor: "#eff6ff",
+    padding: "1px 6px",
+    borderRadius: "4px",
+    fontWeight: 500,
   },
   notificationUnread: {
     width: "8px",
@@ -523,46 +1036,58 @@ const styles = {
     flexShrink: 0,
     marginTop: "6px",
   },
+  deleteNotification: {
+    background: "none",
+    border: "none",
+    fontSize: "14px",
+    cursor: "pointer",
+    color: "#94a3b8",
+    padding: "0 4px",
+    transition: "color 0.2s ease",
+    flexShrink: 0,
+    opacity: 0,
+  },
+  notificationsFooter: {
+    padding: "8px 16px",
+    borderTop: "1px solid #e2e8f0",
+    textAlign: "center",
+  },
+  clearAllBtn: {
+    background: "none",
+    border: "none",
+    fontSize: "12px",
+    cursor: "pointer",
+    color: "#94a3b8",
+    transition: "all 0.2s ease",
+    fontWeight: 500,
+  },
   noNotifications: {
+    padding: "32px 20px",
+    textAlign: "center",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "8px",
+  },
+  loadingNotifications: {
     padding: "24px",
     textAlign: "center",
     color: "#94a3b8",
-    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
   },
-  notifDotSuccess: {
-    width: "8px",
-    height: "8px",
+  spinnerSmall: {
+    width: "16px",
+    height: "16px",
+    border: "2px solid #e2e8f0",
+    borderTopColor: "#2563eb",
     borderRadius: "50%",
-    backgroundColor: "#10b981",
-    flexShrink: 0,
-    marginTop: "4px",
-  },
-  notifDotInfo: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#3b82f6",
-    flexShrink: 0,
-    marginTop: "4px",
-  },
-  notifDotWarning: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#f59e0b",
-    flexShrink: 0,
-    marginTop: "4px",
-  },
-  notifDotDefault: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: "#94a3b8",
-    flexShrink: 0,
-    marginTop: "4px",
+    animation: "spin 0.8s linear infinite",
   },
   
-  // Modal de confirmation
+  // Modal Overlay
   modalOverlay: {
     position: "fixed",
     inset: 0,
@@ -576,79 +1101,91 @@ const styles = {
     padding: "20px",
   },
   modalContent: {
-    backgroundColor: "white",
     borderRadius: "16px",
     width: "440px",
     maxWidth: "100%",
     overflow: "hidden",
-    boxShadow: "0 20px 60px rgba(0, 0, 0, 0.2)",
     animation: "scaleIn 0.25s ease-out",
   },
-  modalHeader: {
-    padding: "16px 24px",
-    borderBottom: "1px solid #e2e8f0",
+  modalClose: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px",
+    borderRadius: "8px",
+    transition: "all 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+  },
+  
+  // Delete Modal styles (copié de NavbarAdmin)
+  deleteModalHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    padding: "20px 24px 0 24px",
   },
-  modalTitle: {
-    margin: 0,
+  deleteIconContainer: {
+    width: "56px",
+    height: "56px",
+    borderRadius: "50%",
+    backgroundColor: "#fef2f2",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteIcon: {
+    color: "#dc2626",
+  },
+  deleteModalBody: {
+    padding: "16px 24px 24px 24px",
+    textAlign: "center",
+  },
+  deleteModalTitle: {
     fontSize: "18px",
     fontWeight: 600,
-    color: "#1e293b",
-    fontFamily: '"Poppins", "Inter", sans-serif',
+    margin: "0 0 12px 0",
   },
-  closeButton: {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer",
-    color: "#94a3b8",
-    padding: "0 4px",
-    transition: "color 0.2s ease",
-  },
-  modalBody: {
-    padding: "24px",
-  },
-  modalText: {
-    margin: "0 0 8px 0",
+  deleteModalText: {
     fontSize: "15px",
-    color: "#1e293b",
-    lineHeight: 1.5,
+    margin: "0 0 8px 0",
+    lineHeight: "1.6",
   },
-  modalSubText: {
-    margin: 0,
+  deleteModalSubtext: {
     fontSize: "13px",
-    color: "#64748b",
+    margin: 0,
   },
-  modalFooter: {
-    padding: "16px 24px",
-    borderTop: "1px solid #e2e8f0",
+  deleteModalFooter: {
     display: "flex",
     gap: "12px",
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    padding: "16px 24px 24px 24px",
   },
-  cancelButton: {
+  deleteCancelBtn: {
     padding: "10px 24px",
-    backgroundColor: "white",
-    color: "#475569",
     border: "1px solid #e2e8f0",
     borderRadius: "40px",
     cursor: "pointer",
-    fontWeight: 500,
     fontSize: "14px",
+    fontWeight: 500,
     transition: "all 0.2s ease",
+    minWidth: "100px",
   },
-  confirmButton: {
+  deleteConfirmBtn: {
     padding: "10px 24px",
     backgroundColor: "#dc2626",
     color: "white",
     border: "none",
     borderRadius: "40px",
     cursor: "pointer",
-    fontWeight: 500,
     fontSize: "14px",
+    fontWeight: 600,
     transition: "all 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    minWidth: "100px",
+    justifyContent: "center",
     boxShadow: "0 2px 8px rgba(220, 38, 38, 0.3)",
   },
 };
@@ -683,10 +1220,17 @@ if (typeof document !== 'undefined') {
         transform: translateY(0);
       }
     }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spin {
+      animation: spin 0.8s linear infinite;
+    }
     
-    /* Hover effects */
     .link:hover {
-      background-color: #f1f5f9 !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
       transform: translateX(4px);
     }
     
@@ -696,38 +1240,62 @@ if (typeof document !== 'undefined') {
     }
     
     .button:hover {
-      background-color: #f1f5f9 !important;
-      color: #1e293b !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
+      color: var(--text-primary, #1e293b) !important;
     }
     
     .toggle:hover {
-      background-color: #f1f5f9 !important;
+      background-color: var(--hover-bg, #f1f5f9) !important;
       transform: scale(1.1);
     }
     
-    .cancel-button:hover {
-      background-color: #f8fafc !important;
+    .delete-cancel-btn:hover {
+      background-color: var(--hover-bg, #f8fafc) !important;
     }
     
-    .confirm-button:hover {
+    .delete-confirm-btn:hover:not(:disabled) {
       background-color: #b91c1c !important;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
     }
     
-    .notification-item:hover {
-      background-color: #f8fafc;
+    .modal-close:hover {
+      background-color: var(--hover-bg, #f1f5f9) !important;
     }
     
-    .close-button:hover {
-      color: #475569 !important;
+    .notification-item:hover {
+      background-color: var(--hover-bg, #f8fafc) !important;
+    }
+    
+    .notification-item:hover .delete-notification {
+      opacity: 1;
     }
     
     .close-dropdown:hover {
-      color: #475569 !important;
+      color: var(--text-primary, #475569) !important;
+    }
+
+    .clear-all:hover {
+      color: var(--text-primary, #475569) !important;
+    }
+
+    .mark-all-read:hover {
+      background-color: #eff6ff !important;
+    }
+
+    .clear-all-btn:hover {
+      color: var(--text-primary, #475569) !important;
+    }
+
+    .delete-notification:hover {
+      color: #dc2626 !important;
+    }
+
+    .refresh-btn:hover {
+      background-color: var(--hover-bg, #f1f5f9) !important;
+      color: #2563eb !important;
     }
     
-    /* Scrollbar personnalisée */
     ::-webkit-scrollbar {
       width: 4px;
     }
@@ -745,7 +1313,6 @@ if (typeof document !== 'undefined') {
       background: #94a3b8;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
       .sidebar {
         width: 0 !important;
@@ -767,8 +1334,16 @@ if (typeof document !== 'undefined') {
         display: none !important;
       }
       
-      .mobile-toggle {
-        display: flex !important;
+      .notifications-dropdown {
+        width: 340px !important;
+        left: -120px !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .notifications-dropdown {
+        width: 300px !important;
+        left: -140px !important;
       }
     }
   `;

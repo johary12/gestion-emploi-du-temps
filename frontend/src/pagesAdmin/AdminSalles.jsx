@@ -169,7 +169,7 @@ export default function AdminSalles() {
           <h1 style={{
             ...styles.pageTitle,
             color: 'var(--text-primary, #1e293b)',
-          }}>🚪 Gestion des salles</h1>
+          }}>Gestion des salles</h1>
           <p style={{
             ...styles.pageSubtitle,
             color: 'var(--text-secondary, #64748b)',
@@ -711,7 +711,7 @@ export default function AdminSalles() {
                     Chargement...
                   </>
                 ) : (
-                  '💾 Enregistrer'
+                  'Enregistrer'
                 )}
               </button>
             </div>

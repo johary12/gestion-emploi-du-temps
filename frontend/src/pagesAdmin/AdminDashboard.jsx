@@ -1,10 +1,12 @@
-// src/pagesAdmin/AdminDashboard.jsx - Version avec prise en charge du mode sombre
+// src/pagesAdmin/AdminDashboard.jsx - Version sans section Distribution
 import { useState, useEffect, useCallback } from 'react';
 import { 
   Users, BookOpen, DoorOpen, Calendar, ChevronRight, 
   TrendingUp, TrendingDown, BarChart3, Activity, 
   Clock, CheckCircle, AlertCircle, Zap, Award, Star,
-  UserPlus, UserCheck, School, GraduationCap
+  UserPlus, UserCheck, School, GraduationCap, RefreshCw,
+  Target, Briefcase, FileText, Settings,
+  ChevronLeft, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
 import { profService, etudiantService, salleService, edtService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
@@ -15,6 +17,111 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState([]);
   const [trends, setTrends] = useState({});
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // Générer des activités récentes à partir des données réelles
+  const generateRecentActivity = async () => {
+    try {
+      const [profsRes, etudiantsRes, sallesRes, coursRes] = await Promise.all([
+        profService.getAll(),
+        etudiantService.getAll(),
+        salleService.getAll(),
+        edtService.getAll()
+      ]);
+
+      const activities = [];
+
+      if (profsRes.data && profsRes.data.length > 0) {
+        const recentProfs = profsRes.data.slice(-3);
+        recentProfs.forEach(prof => {
+          activities.push({
+            action: `A ajouté un nouveau professeur: ${prof.nom || prof.name || 'Sans nom'}`,
+            user: 'Administrateur',
+            time: prof.createdAt || 'Récemment',
+            type: 'success',
+            icon: 'user-plus'
+          });
+        });
+      }
+
+      if (etudiantsRes.data && etudiantsRes.data.length > 0) {
+        const recentEtudiants = etudiantsRes.data.slice(-3);
+        recentEtudiants.forEach(etudiant => {
+          activities.push({
+            action: `A inscrit un nouvel étudiant: ${etudiant.nom || etudiant.name || 'Sans nom'}`,
+            user: 'Administrateur',
+            time: etudiant.createdAt || 'Récemment',
+            type: 'success',
+            icon: 'user-check'
+          });
+        });
+      }
+
+      if (sallesRes.data && sallesRes.data.length > 0) {
+        const recentSalles = sallesRes.data.slice(-3);
+        recentSalles.forEach(salle => {
+          const nomSalle = salle.nom || salle.numero || salle.name || 'Sans nom';
+          activities.push({
+            action: `A ajouté une nouvelle salle: ${nomSalle}`,
+            user: 'Administrateur',
+            time: salle.createdAt || 'Récemment',
+            type: 'info',
+            icon: 'door-open'
+          });
+        });
+      }
+
+      if (coursRes.data && coursRes.data.length > 0) {
+        const recentCours = coursRes.data.slice(-3);
+        recentCours.forEach(cours => {
+          const nomCours = cours.nom || cours.matiere || cours.name || cours.titre || 'Sans nom';
+          activities.push({
+            action: `A planifié un nouveau cours: ${nomCours}`,
+            user: 'Administrateur',
+            time: cours.createdAt || 'Récemment',
+            type: 'info',
+            icon: 'calendar'
+          });
+        });
+      }
+
+      if (activities.length === 0) {
+        activities.push({
+          action: 'Bienvenue sur le tableau de bord',
+          user: 'Système',
+          time: 'Maintenant',
+          type: 'info',
+          icon: 'activity'
+        });
+        activities.push({
+          action: 'Commencez à ajouter des données',
+          user: 'Système',
+          time: 'Maintenant',
+          type: 'info',
+          icon: 'activity'
+        });
+      }
+
+      activities.sort((a, b) => {
+        if (a.time === 'Récemment' && b.time !== 'Récemment') return -1;
+        if (b.time === 'Récemment' && a.time !== 'Récemment') return 1;
+        return 0;
+      });
+
+      return activities.slice(0, 20);
+      
+    } catch (error) {
+      console.error('Erreur lors de la génération des activités:', error);
+      return getFallbackActivities();
+    }
+  };
+
+  const getFallbackActivities = () => {
+    return [
+      { action: 'Bienvenue sur le tableau de bord', user: 'Système', time: 'Maintenant', type: 'info', icon: 'activity' },
+      { action: 'Ajoutez des professeurs, étudiants ou salles', user: 'Système', time: 'Maintenant', type: 'info', icon: 'activity' },
+    ];
+  };
 
   const loadStats = useCallback(async () => {
     try {
@@ -34,7 +141,6 @@ export default function AdminDashboard() {
       
       setStats(statsData);
       
-      // Simuler des données de tendance
       setTrends({
         profs: { change: 12, direction: 'up' },
         etudiants: { change: 8, direction: 'up' },
@@ -42,17 +148,12 @@ export default function AdminDashboard() {
         cours: { change: 5, direction: 'down' }
       });
 
-      // Simuler des activités récentes
-      setRecentActivity([
-        { action: 'Nouveau professeur ajouté', user: 'Dr. Jean Rakoto', time: 'Il y a 5 min', type: 'success' },
-        { action: 'Emploi du temps publié', user: 'Semaine du 15-21 Mars', time: 'Il y a 25 min', type: 'info' },
-        { action: 'Nouvel étudiant inscrit', user: 'Marie Rasoanaivo', time: 'Il y a 1h', type: 'success' },
-        { action: 'Salle modifiée', user: 'Salle A101', time: 'Il y a 2h', type: 'warning' },
-        { action: 'Disponibilité mise à jour', user: 'Prof. Andrianarivo', time: 'Il y a 3h', type: 'info' }
-      ]);
+      const activities = await generateRecentActivity();
+      setRecentActivity(activities);
       
     } catch (error) {
       console.error('Erreur:', error);
+      setRecentActivity(getFallbackActivities());
     } finally {
       setLoading(false);
     }
@@ -62,14 +163,33 @@ export default function AdminDashboard() {
     loadStats();
   }, [loadStats]);
 
-  const getActivityIcon = (type) => {
-    switch(type) {
-      case 'success': return <CheckCircle size={16} color="#10b981" />;
-      case 'warning': return <AlertCircle size={16} color="#f59e0b" />;
-      case 'info': return <Clock size={16} color="#3b82f6" />;
-      default: return <Activity size={16} color="var(--text-muted, #64748b)" />;
+  const handleRefresh = () => {
+    setLoading(true);
+    loadStats();
+  };
+
+  const getActivityIcon = (type, iconName) => {
+    switch(iconName) {
+      case 'user-plus': return <UserPlus size={16} color="#2563eb" />;
+      case 'user-check': return <UserCheck size={16} color="#10b981" />;
+      case 'door-open': return <DoorOpen size={16} color="#d97706" />;
+      case 'calendar': return <Calendar size={16} color="#3b82f6" />;
+      default:
+        switch(type) {
+          case 'success': return <CheckCircle size={16} color="#10b981" />;
+          case 'warning': return <AlertCircle size={16} color="#f59e0b" />;
+          case 'info': return <Clock size={16} color="#3b82f6" />;
+          default: return <Activity size={16} color="var(--text-muted, #64748b)" />;
+        }
     }
   };
+
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(recentActivity.length / itemsPerPage);
+  const currentActivities = recentActivity.slice(
+    currentPage * itemsPerPage,
+    (currentPage + 1) * itemsPerPage
+  );
 
   if (loading) {
     return (
@@ -92,7 +212,8 @@ export default function AdminDashboard() {
       bg: '#eff6ff',
       link: '/admin/profs',
       gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-      subInfo: `${trends.profs?.change || 0}% ce mois-ci`
+      subInfo: `+${trends.profs?.change || 0}% ce mois-ci`,
+      trend: trends.profs?.direction || 'up'
     },
     { 
       title: 'Étudiants', 
@@ -102,7 +223,8 @@ export default function AdminDashboard() {
       bg: '#d1fae5',
       link: '/admin/etudiants',
       gradient: 'linear-gradient(135deg, #059669, #10b981)',
-      subInfo: `${trends.etudiants?.change || 0}% ce mois-ci`
+      subInfo: `+${trends.etudiants?.change || 0}% ce mois-ci`,
+      trend: trends.etudiants?.direction || 'up'
     },
     { 
       title: 'Salles', 
@@ -112,7 +234,8 @@ export default function AdminDashboard() {
       bg: '#fef3c7',
       link: '/admin/salles',
       gradient: 'linear-gradient(135deg, #d97706, #f59e0b)',
-      subInfo: `${trends.salles?.change || 0} nouvelles`
+      subInfo: `+${trends.salles?.change || 0} nouvelles`,
+      trend: trends.salles?.direction || 'up'
     },
     { 
       title: 'Cours planifiés', 
@@ -122,11 +245,11 @@ export default function AdminDashboard() {
       bg: '#fee2e2',
       link: '/admin/edt',
       gradient: 'linear-gradient(135deg, #dc2626, #ef4444)',
-      subInfo: `${trends.cours?.change || 0}% ce mois-ci`
+      subInfo: `${trends.cours?.change || 0}% ce mois-ci`,
+      trend: trends.cours?.direction || 'down'
     }
   ];
 
-  // Calculer le total
   const total = stats.profs + stats.etudiants + stats.salles + stats.cours;
 
   return (
@@ -141,13 +264,26 @@ export default function AdminDashboard() {
           <h1 style={{
             ...styles.title,
             color: "var(--text-primary, #1e293b)",
-          }}>📊 Tableau de bord</h1>
+          }}>Tableau de bord</h1>
           <p style={{
             ...styles.subtitle,
             color: "var(--text-secondary, #64748b)",
           }}>Bienvenue sur votre espace d'administration</p>
         </div>
         <div style={styles.headerActions}>
+          <button 
+            onClick={handleRefresh}
+            style={{
+              ...styles.refreshButton,
+              backgroundColor: "var(--bg-card, #ffffff)",
+              borderColor: "var(--border-color, #e2e8f0)",
+              color: "var(--text-secondary, #475569)",
+            }}
+            disabled={loading}
+          >
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            <span>Actualiser</span>
+          </button>
           <div style={{
             ...styles.headerBadge,
             backgroundColor: "var(--bg-input, #d1fae5)",
@@ -234,13 +370,33 @@ export default function AdminDashboard() {
             }}>Cours ce mois-ci</div>
           </div>
         </div>
+        <div style={{
+          ...styles.totalCard,
+          backgroundColor: "var(--bg-card, #ffffff)",
+          borderColor: "var(--border-color, #e2e8f0)",
+          boxShadow: "0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.05))",
+        }}>
+          <div style={{...styles.totalIcon, background: '#fce7f3', color: '#db2777'}}>
+            <Target size={24} />
+          </div>
+          <div>
+            <div style={{
+              ...styles.totalValue,
+              color: "var(--text-primary, #1e293b)",
+            }}>85%</div>
+            <div style={{
+              ...styles.totalLabel,
+              color: "var(--text-secondary, #64748b)",
+            }}>Objectifs atteints</div>
+          </div>
+        </div>
       </div>
 
       {/* Cartes de statistiques */}
       <div style={styles.statsGrid}>
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
-          const isTrendingUp = trends[stat.title.toLowerCase()]?.direction === 'up';
+          const isTrendingUp = stat.trend === 'up';
           return (
             <div 
               key={index} 
@@ -303,7 +459,7 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      {/* Activités récentes et rapides */}
+      {/* Activités récentes et actions rapides */}
       <div style={styles.bottomSection}>
         {/* Activités récentes */}
         <div style={{
@@ -317,7 +473,7 @@ export default function AdminDashboard() {
             borderBottom: "2px solid var(--border-color, #f1f5f9)",
           }}>
             <div style={styles.sectionHeaderLeft}>
-              <Activity size={20} style={styles.sectionIcon} />
+              <Clock size={20} style={styles.sectionIcon} />
               <h2 style={{
                 ...styles.sectionTitle,
                 color: "var(--text-primary, #1e293b)",
@@ -325,39 +481,92 @@ export default function AdminDashboard() {
             </div>
             <span style={{
               ...styles.sectionBadge,
-              backgroundColor: "var(--bg-input, #f1f5f9)",
-              color: "var(--text-secondary, #64748b)",
-            }}>Dernières 24h</span>
+              backgroundColor: "var(--bg-input, #eff6ff)",
+              color: "#2563eb",
+            }}>{recentActivity.length} activités</span>
           </div>
+
           <div style={styles.activityList}>
-            {recentActivity.map((activity, index) => (
-              <div key={index} style={{
-                ...styles.activityItem,
-                backgroundColor: "var(--bg-input, #f8fafc)",
-              }}>
-                <div style={{
-                  ...styles.activityIcon,
-                  backgroundColor: "var(--bg-card, #ffffff)",
+            {currentActivities.length > 0 ? (
+              currentActivities.map((activity, index) => (
+                <div key={index} style={{
+                  ...styles.activityItem,
+                  backgroundColor: "var(--bg-input, #f8fafc)",
                 }}>
-                  {getActivityIcon(activity.type)}
-                </div>
-                <div style={styles.activityContent}>
                   <div style={{
-                    ...styles.activityAction,
-                    color: "var(--text-primary, #1e293b)",
-                  }}>{activity.action}</div>
+                    ...styles.activityIcon,
+                    backgroundColor: "var(--bg-card, #ffffff)",
+                  }}>
+                    {getActivityIcon(activity.type, activity.icon)}
+                  </div>
+                  <div style={styles.activityContent}>
+                    <div style={{
+                      ...styles.activityAction,
+                      color: "var(--text-primary, #1e293b)",
+                    }}>{activity.action}</div>
+                    <div style={{
+                      ...styles.activityUser,
+                      color: "var(--text-secondary, #64748b)",
+                    }}>{activity.user}</div>
+                  </div>
                   <div style={{
-                    ...styles.activityUser,
-                    color: "var(--text-secondary, #64748b)",
-                  }}>{activity.user}</div>
+                    ...styles.activityTime,
+                    color: "var(--text-muted, #94a3b8)",
+                  }}>{activity.time}</div>
                 </div>
-                <div style={{
-                  ...styles.activityTime,
+              ))
+            ) : (
+              <div style={styles.noActivity}>
+                <Activity size={32} style={styles.noActivityIcon} />
+                <p style={{
+                  ...styles.noActivityText,
+                  color: "var(--text-secondary, #64748b)",
+                }}>Aucune activité récente</p>
+                <p style={{
+                  ...styles.noActivitySubtext,
                   color: "var(--text-muted, #94a3b8)",
-                }}>{activity.time}</div>
+                }}>Les actions que vous effectuez apparaîtront ici</p>
               </div>
-            ))}
+            )}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={styles.pagination}>
+              <button 
+                onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                disabled={currentPage === 0}
+                style={{
+                  ...styles.paginationButton,
+                  backgroundColor: "var(--bg-input, #f8fafc)",
+                  borderColor: "var(--border-color, #e2e8f0)",
+                  color: "var(--text-secondary, #475569)",
+                  opacity: currentPage === 0 ? 0.5 : 1,
+                }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{
+                ...styles.paginationInfo,
+                color: "var(--text-secondary, #64748b)",
+              }}>
+                {currentPage + 1} / {totalPages}
+              </span>
+              <button 
+                onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                disabled={currentPage === totalPages - 1}
+                style={{
+                  ...styles.paginationButton,
+                  backgroundColor: "var(--bg-input, #f8fafc)",
+                  borderColor: "var(--border-color, #e2e8f0)",
+                  color: "var(--text-secondary, #475569)",
+                  opacity: currentPage === totalPages - 1 ? 0.5 : 1,
+                }}
+              >
+                <ChevronRightIcon size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Actions rapides */}
@@ -371,11 +580,13 @@ export default function AdminDashboard() {
             ...styles.sectionHeader,
             borderBottom: "2px solid var(--border-color, #f1f5f9)",
           }}>
-            <Zap size={20} style={styles.sectionIcon} />
-            <h2 style={{
-              ...styles.sectionTitle,
-              color: "var(--text-primary, #1e293b)",
-            }}>Actions rapides</h2>
+            <div style={styles.sectionHeaderLeft}>
+              <Zap size={20} style={styles.sectionIcon} />
+              <h2 style={{
+                ...styles.sectionTitle,
+                color: "var(--text-primary, #1e293b)",
+              }}>Actions rapides</h2>
+            </div>
           </div>
           <div style={styles.quickActionsGrid}>
             <button style={{
@@ -422,6 +633,28 @@ export default function AdminDashboard() {
                 color: "var(--text-primary, #1e293b)",
               }}>Planifier un cours</span>
             </button>
+            <button style={{
+              ...styles.quickAction,
+              backgroundColor: "var(--bg-input, #f8fafc)",
+              borderColor: "var(--border-color, #e2e8f0)",
+            }} onClick={() => window.location.href = '/admin/parametres'}>
+              <Settings size={20} style={styles.quickActionIcon} />
+              <span style={{
+                ...styles.quickActionText,
+                color: "var(--text-primary, #1e293b)",
+              }}>Paramètres</span>
+            </button>
+            <button style={{
+              ...styles.quickAction,
+              backgroundColor: "var(--bg-input, #f8fafc)",
+              borderColor: "var(--border-color, #e2e8f0)",
+            }} onClick={() => window.location.href = '/admin/aide'}>
+              <FileText size={20} style={styles.quickActionIcon} />
+              <span style={{
+                ...styles.quickActionText,
+                color: "var(--text-primary, #1e293b)",
+              }}>Centre d'aide</span>
+            </button>
           </div>
         </div>
       </div>
@@ -449,6 +682,7 @@ export default function AdminDashboard() {
   );
 }
 
+// Styles
 const styles = {
   container: {
     padding: '24px 32px',
@@ -458,7 +692,6 @@ const styles = {
     minHeight: '100vh',
   },
 
-  // Loading
   loadingContainer: {
     display: 'flex',
     flexDirection: 'column',
@@ -480,7 +713,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Header
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -505,6 +737,18 @@ const styles = {
     alignItems: 'center',
     flexWrap: 'wrap',
   },
+  refreshButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 14px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '20px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    fontWeight: 500,
+  },
   headerBadge: {
     display: 'flex',
     alignItems: 'center',
@@ -524,7 +768,6 @@ const styles = {
     fontSize: '12px',
   },
 
-  // Stats Overview
   statsOverview: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -559,7 +802,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Stats Grid
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -635,7 +877,6 @@ const styles = {
     transition: 'all 0.2s ease',
   },
 
-  // Bottom Section
   bottomSection: {
     display: 'grid',
     gridTemplateColumns: '2fr 1fr',
@@ -643,7 +884,6 @@ const styles = {
     marginBottom: '32px',
   },
 
-  // Activity Section
   activitySection: {
     borderRadius: '16px',
     border: '1px solid #e2e8f0',
@@ -680,7 +920,8 @@ const styles = {
   activityList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
+    minHeight: '200px',
   },
   activityItem: {
     display: 'flex',
@@ -714,7 +955,53 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Quick Actions
+  noActivity: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '30px 20px',
+    gap: '8px',
+  },
+  noActivityIcon: {
+    color: 'var(--text-muted, #94a3b8)',
+    opacity: 0.5,
+  },
+  noActivityText: {
+    fontSize: '16px',
+    fontWeight: 500,
+    margin: 0,
+  },
+  noActivitySubtext: {
+    fontSize: '13px',
+    margin: 0,
+  },
+
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    marginTop: '12px',
+    paddingTop: '12px',
+    borderTop: '1px solid var(--border-color, #f1f5f9)',
+  },
+  paginationButton: {
+    padding: '4px 10px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+    background: 'none',
+  },
+  paginationInfo: {
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+
   quickActions: {
     borderRadius: '16px',
     border: '1px solid #e2e8f0',
@@ -722,15 +1009,15 @@ const styles = {
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
   },
   quickActionsGrid: {
-    display: 'flex',
-    flexDirection: 'column',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
     gap: '10px',
   },
   quickAction: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
+    gap: '10px',
+    padding: '10px 14px',
     border: '1px solid #e2e8f0',
     borderRadius: '10px',
     cursor: 'pointer',
@@ -743,11 +1030,10 @@ const styles = {
     flexShrink: 0,
   },
   quickActionText: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500,
   },
 
-  // Footer
   dashboardFooter: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -769,12 +1055,16 @@ const styles = {
   },
 };
 
-// Animations et styles globaux
+// Animations
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = `
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    .spin {
+      animation: spin 0.8s linear infinite;
     }
 
     .stat-card:hover {
@@ -810,13 +1100,25 @@ if (typeof document !== 'undefined') {
       color: #1d4ed8;
     }
 
-    .stat-progress-fill {
-      animation: progressGrow 0.8s ease-out;
+    .refresh-button:hover:not(:disabled) {
+      background-color: var(--bg-input, #f1f5f9) !important;
+      border-color: #2563eb !important;
+      color: #2563eb !important;
     }
 
-    @keyframes progressGrow {
-      from { width: 0; }
-      to { width: var(--progress-width); }
+    .refresh-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .pagination-button:hover:not(:disabled) {
+      background-color: var(--bg-input, #f1f5f9) !important;
+      border-color: #2563eb !important;
+      color: #2563eb !important;
+    }
+
+    .pagination-button:disabled {
+      cursor: not-allowed;
     }
 
     @media (max-width: 1024px) {
@@ -838,10 +1140,11 @@ if (typeof document !== 'undefined') {
       .header-actions {
         width: 100%;
         justify-content: flex-start;
+        flex-wrap: wrap;
       }
       
       .stats-overview {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
       }
       
       .stats-grid {
@@ -866,9 +1169,19 @@ if (typeof document !== 'undefined') {
         width: auto;
       }
       
+      .quick-actions-grid {
+        grid-template-columns: 1fr;
+      }
+      
       .dashboard-footer {
         flex-direction: column;
         text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-overview {
+        grid-template-columns: 1fr;
       }
     }
   `;

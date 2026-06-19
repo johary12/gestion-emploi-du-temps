@@ -23,10 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // ── Routes Professeur (accessible à tous les utilisateurs authentifiés) ──
     Route::prefix('prof')->group(function () {
-        // Récupérer l'emploi du temps du professeur connecté pour la semaine actuelle
         Route::get('/mon-emploi-du-temps', [EmploiDuTempsController::class, 'mySchedule']);
-        
-        // Récupérer l'emploi du temps du professeur pour une semaine spécifique
         Route::get('/mon-emploi-du-temps/semaine/{date}', 
             [EmploiDuTempsController::class, 'myScheduleByWeek']);
     });
@@ -65,11 +62,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/emploi-du-temps/filter', 
             [EmploiDuTempsController::class, 'filterByCriteria']);
         
-        // Envoyer email aux étudiants
+        // ✅ Envoyer email aux étudiants
         Route::post('/emploi-du-temps/envoyer-etudiants', 
             [EmploiDuTempsController::class, 'envoyerEmail']);
         
-        // Envoyer email aux professeurs
+        // ✅ Envoyer email aux professeurs
         Route::post('/emploi-du-temps/envoyer-profs', 
             [EmploiDuTempsController::class, 'envoyerEmailProfs']);
         

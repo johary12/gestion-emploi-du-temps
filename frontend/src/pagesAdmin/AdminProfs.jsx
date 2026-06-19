@@ -238,7 +238,7 @@ export default function AdminProfs() {
           <h1 style={{
             ...styles.pageTitle,
             color: 'var(--text-primary, #1e293b)',
-          }}>👨‍🏫 Gestion des professeurs</h1>
+          }}>Gestion des professeurs</h1>
           <p style={{
             ...styles.pageSubtitle,
             color: 'var(--text-secondary, #64748b)',
@@ -728,7 +728,7 @@ export default function AdminProfs() {
                     Chargement...
                   </>
                 ) : (
-                  '💾 Enregistrer'
+                  ' Enregistrer'
                 )}
               </button>
             </div>

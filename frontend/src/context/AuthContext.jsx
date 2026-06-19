@@ -1,5 +1,5 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/api';
 
 // ✅ Création du contexte
@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// ✅ Hook personnalisé
+// ✅ Hook personnalisé - Export nommé
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -127,3 +127,6 @@ export const useAuth = () => {
   }
   return context;
 };
+
+// ✅ Export par défaut pour la compatibilité
+export default AuthProvider;

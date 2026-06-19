@@ -1,14 +1,15 @@
-// src/pagesAdmin/AdminAide.jsx - Version avec mode sombre
+// src/pagesProf/ProfAide.jsx
 import { useState, useEffect } from 'react';
 import {
   HelpCircle, Search, Mail, Phone, MessageCircle,
-  BookOpen, Users, Settings, Shield, Calendar, Clock,
+  BookOpen, Users, Settings, Calendar, Clock,
   ChevronDown, ChevronUp, CheckCircle,
-  X, Link, Award, AlertCircle
+  X, Link, Award, AlertCircle,
+  User
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
-export default function AdminAide() {
+export default function ProfAide() {
   const { theme } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [openFaq, setOpenFaq] = useState(null);
@@ -19,118 +20,103 @@ export default function AdminAide() {
   const isDark = theme === 'dark';
 
   const categories = [
-    { id: 'all', name: 'Tous', icon: HelpCircle, color: '#2563eb' },
-    { id: 'profs', name: 'Professeurs', icon: Users, color: '#7c3aed' },
-    { id: 'edt', name: 'Emploi du temps', icon: Calendar, color: '#059669' },
-    { id: 'securite', name: 'Sécurité', icon: Shield, color: '#dc2626' },
-    { id: 'parametres', name: 'Paramètres', icon: Settings, color: '#f59e0b' }
+    { id: 'all', name: 'Tous', icon: HelpCircle, color: '#059669' },
+    { id: 'disponibilites', name: 'Disponibilités', icon: Clock, color: '#059669' },
+    { id: 'edt', name: 'Emploi du temps', icon: Calendar, color: '#3b82f6' },
+    { id: 'cours', name: 'Cours', icon: BookOpen, color: '#7c3aed' },
+    { id: 'compte', name: 'Compte', icon: User, color: '#f59e0b' }
   ];
 
   const faqs = [
     {
       id: 1,
-      category: 'profs',
-      question: "Comment ajouter un nouveau professeur ?",
-      answer: "Pour ajouter un nouveau professeur, allez dans la section 'Professeurs' puis cliquez sur 'Ajouter un professeur'. Remplissez les informations requises (nom, email, spécialité) et validez. Le professeur recevra un email avec ses identifiants de connexion.",
+      category: 'disponibilites',
+      question: "Comment ajouter une disponibilité ?",
+      answer: "Pour ajouter une disponibilité, allez dans la section 'Mes disponibilités' puis cliquez sur le bouton 'Ajouter'. Sélectionnez le jour et les horaires souhaités, puis validez. Vos disponibilités seront visibles par l'administration pour la planification des cours.",
       steps: [
-        "Allez dans le menu latéral → Professeurs",
-        "Cliquez sur le bouton 'Ajouter un professeur'",
-        "Remplissez le formulaire avec les informations",
-        "Cliquez sur 'Enregistrer' pour finaliser"
+        "Allez dans le menu latéral → Mes disponibilités",
+        "Cliquez sur 'Ajouter'",
+        "Sélectionnez le jour de la semaine",
+        "Choisissez l'heure de début et de fin",
+        "Cliquez sur 'Enregistrer'"
       ],
-      tags: ['ajout', 'professeur', 'inscription']
+      tags: ['disponibilité', 'ajout', 'horaire']
     },
     {
       id: 2,
       category: 'edt',
-      question: "Comment gérer les disponibilités des professeurs ?",
-      answer: "Dans la section 'Disponibilités', vous pouvez visualiser toutes les disponibilités des professeurs. Vous pouvez filtrer par professeur, par jour ou par matière. Pour modifier une disponibilité, cliquez dessus et ajustez les horaires.",
+      question: "Comment consulter mon emploi du temps ?",
+      answer: "Rendez-vous dans la section 'Emploi du temps' du menu latéral. Vous y verrez votre planning hebdomadaire avec tous vos cours. Vous pouvez naviguer entre les semaines et exporter votre emploi du temps au format PDF.",
       steps: [
-        "Accédez à la section 'Disponibilités'",
-        "Utilisez les filtres pour rechercher",
-        "Cliquez sur une disponibilité pour la modifier",
-        "Confirmez les changements"
+        "Allez dans le menu latéral → Emploi du temps",
+        "Naviguez entre les semaines avec les boutons",
+        "Cliquez sur 'Exporter PDF' pour télécharger",
+        "Utilisez 'Imprimer' pour une version papier"
       ],
-      tags: ['disponibilité', 'professeur', 'horaire']
+      tags: ['emploi', 'planning', 'cours']
     },
     {
       id: 3,
-      category: 'edt',
-      question: "Comment créer un emploi du temps ?",
-      answer: "Rendez-vous dans 'Emploi du temps', sélectionnez un niveau et une période. Utilisez l'interface intuitive pour assigner les cours aux créneaux horaires. Le système vérifiera automatiquement les conflits de disponibilité.",
-      steps: [
-        "Allez dans 'Emploi du temps'",
-        "Sélectionnez le niveau et la semaine",
-        "Assignez les cours dans les créneaux",
-        "Vérifiez les conflits",
-        "Publiez l'emploi du temps"
-      ],
-      tags: ['emploi', 'cours', 'planification']
+      category: 'cours',
+      question: "Quelles informations sont affichées pour un cours ?",
+      answer: "Chaque cours affiche : la matière, le niveau, le parcours, l'heure de début et fin, le professeur (vous) et la salle. Les cours sont organisés par jour de la semaine dans une grille claire et intuitive.",
+      steps: [],
+      tags: ['cours', 'matière', 'salle']
     },
     {
       id: 4,
-      category: 'profs',
-      question: "Comment gérer les salles et leurs ressources ?",
-      answer: "Dans 'Salles', vous pouvez ajouter, modifier ou supprimer des salles. Chaque salle peut avoir des ressources spécifiques (projecteur, tableau interactif, etc.). Vous pouvez également vérifier la disponibilité des salles en temps réel.",
+      category: 'compte',
+      question: "Comment changer mon mot de passe ?",
+      answer: "Allez dans 'Paramètres' dans le menu latéral, puis dans la section 'Sécurité', cliquez sur 'Changer le mot de passe'. Saisissez votre mot de passe actuel puis votre nouveau mot de passe (minimum 6 caractères).",
       steps: [
-        "Accédez à 'Salles'",
-        "Ajoutez une nouvelle salle",
-        "Configurez les ressources",
-        "Vérifiez les disponibilités"
+        "Allez dans 'Paramètres'",
+        "Section 'Sécurité'",
+        "Cliquez sur 'Changer le mot de passe'",
+        "Remplissez les champs et validez"
       ],
-      tags: ['salle', 'ressource', 'disponibilité']
+      tags: ['mot de passe', 'sécurité', 'compte']
     },
     {
       id: 5,
-      category: 'edt',
-      question: "Comment exporter les données ?",
-      answer: "Dans chaque section (Professeurs, Étudiants, Emploi du temps), vous trouverez un bouton 'Exporter' en haut à droite. Vous pouvez exporter au format Excel, PDF ou CSV selon vos besoins.",
-      steps: [
-        "Allez dans la section souhaitée",
-        "Cliquez sur 'Exporter'",
-        "Choisissez le format souhaité",
-        "Téléchargez le fichier"
-      ],
-      tags: ['export', 'données', 'PDF']
+      category: 'disponibilites',
+      question: "Comment supprimer une disponibilité ?",
+      answer: "Dans la liste de vos disponibilités, chaque entrée possède un bouton de suppression (icône corbeille). Cliquez dessus pour supprimer la disponibilité. Une confirmation vous sera demandée avant la suppression définitive.",
+      steps: [],
+      tags: ['suppression', 'disponibilité']
     },
     {
       id: 6,
-      category: 'securite',
-      question: "Comment réinitialiser un mot de passe utilisateur ?",
-      answer: "Allez dans le profil de l'utilisateur concerné, cliquez sur 'Réinitialiser le mot de passe'. Un email automatique sera envoyé avec un lien de réinitialisation sécurisé et valable 24h.",
+      category: 'edt',
+      question: "Comment exporter mon emploi du temps en PDF ?",
+      answer: "Dans la page 'Emploi du temps', utilisez le bouton 'Exporter PDF' dans l'en-tête. Le PDF généré contient tous vos cours de la semaine avec les détails (matière, horaires, niveau, salle, parcours).",
       steps: [
-        "Trouvez l'utilisateur dans la liste",
-        "Cliquez sur son profil",
-        "Sélectionnez 'Réinitialiser mot de passe'",
-        "Confirmez l'action"
+        "Allez dans 'Emploi du temps'",
+        "Cliquez sur 'Exporter PDF'",
+        "Attendez la génération",
+        "Le fichier se télécharge automatiquement"
       ],
-      tags: ['mot de passe', 'réinitialisation', 'sécurité']
+      tags: ['export', 'PDF', 'téléchargement']
     },
     {
       id: 7,
-      category: 'parametres',
-      question: "Comment configurer les notifications ?",
-      answer: "Dans 'Paramètres', allez dans la section 'Notifications'. Vous pouvez activer ou désactiver les notifications par email, les notifications push et le résumé quotidien selon vos préférences.",
+      category: 'compte',
+      question: "Comment gérer mes notifications ?",
+      answer: "Dans 'Paramètres', section 'Notifications', vous pouvez activer ou désactiver les notifications par email, les notifications push et le résumé quotidien de vos cours.",
       steps: [
         "Allez dans 'Paramètres'",
-        "Cliquez sur 'Notifications'",
-        "Activez/désactivez les options",
-        "Sauvegardez les changements"
+        "Section 'Notifications'",
+        "Activez/désactivez les options souhaitées",
+        "Les changements sont sauvegardés automatiquement"
       ],
       tags: ['notification', 'email', 'push']
     },
     {
       id: 8,
-      category: 'securite',
-      question: "Comment activer l'authentification à deux facteurs ?",
-      answer: "Dans 'Paramètres', section 'Sécurité', activez l'option 'Authentification à deux facteurs'. Vous devrez scanner un QR code avec une application d'authentification comme Google Authenticator.",
-      steps: [
-        "Allez dans 'Paramètres' → 'Sécurité'",
-        "Activez l'authentification à deux facteurs",
-        "Scannez le QR code",
-        "Confirmez le code de vérification"
-      ],
-      tags: ['2FA', 'sécurité', 'authentification']
+      category: 'cours',
+      question: "Que faire si un cours n'apparaît pas dans mon emploi du temps ?",
+      answer: "Contactez l'administration pour vérifier l'assignation des cours. Assurez-vous également que vous êtes bien sur la bonne semaine dans l'interface. Vous pouvez aussi rafraîchir la page ou vous déconnecter/reconnecter.",
+      steps: [],
+      tags: ['cours', 'manquant', 'problème']
     }
   ];
 
@@ -157,14 +143,14 @@ export default function AdminAide() {
       {/* En-tête */}
       <div style={{
         ...styles.header,
-        background: `linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #7c3aed 100%)`,
+        background: `linear-gradient(135deg, #059669 0%, #10b981 50%, #047857 100%)`,
       }}>
         <div style={styles.headerIcon}>
           <HelpCircle size={40} color="white" />
         </div>
         <div style={styles.headerContent}>
           <h1 style={styles.title}>Centre d'aide</h1>
-          <p style={styles.subtitle}>Trouvez des réponses et du support pour vos questions</p>
+          <p style={styles.subtitle}>Trouvez des réponses à vos questions</p>
         </div>
         <button onClick={handleCopyLink} style={styles.copyButton}>
           <Link size={16} />
@@ -175,8 +161,8 @@ export default function AdminAide() {
       {/* Barre de recherche */}
       <div style={{
         ...styles.searchContainer,
-        borderColor: searchFocused ? '#2563eb' : (isDark ? '#334155' : '#e2e8f0'),
-        boxShadow: searchFocused ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : 'none',
+        borderColor: searchFocused ? '#059669' : (isDark ? '#334155' : '#e2e8f0'),
+        boxShadow: searchFocused ? '0 0 0 3px rgba(5, 150, 105, 0.15)' : 'none',
         backgroundColor: isDark ? '#1e293b' : '#ffffff',
       }}>
         <Search size={20} style={styles.searchIcon} />
@@ -256,10 +242,7 @@ export default function AdminAide() {
           backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderColor: isDark ? '#334155' : '#e2e8f0',
         }}>
-          <div style={{
-            ...styles.sectionHeader,
-            borderBottom: `2px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-          }}>
+          <div style={styles.sectionHeader}>
             <MessageCircle size={24} style={styles.sectionIcon} />
             <div>
               <h2 style={{
@@ -271,11 +254,7 @@ export default function AdminAide() {
                 color: isDark ? '#94a3b8' : '#64748b',
               }}>Les réponses aux questions les plus fréquentes</p>
             </div>
-            <span style={{
-              ...styles.sectionBadge,
-              backgroundColor: isDark ? '#0f172a' : '#eff6ff',
-              color: '#2563eb',
-            }}>{filteredFaqs.length} questions</span>
+            <span style={styles.sectionBadge}>{filteredFaqs.length} questions</span>
           </div>
 
           <div style={styles.faqList}>
@@ -285,17 +264,17 @@ export default function AdminAide() {
                 return (
                   <div key={faq.id} style={{
                     ...styles.faqItem,
-                    borderBottom: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+                    borderColor: isDark ? '#334155' : '#f1f5f9',
                   }}>
                     <button
                       onClick={() => setOpenFaq(openFaq === faq.id ? null : faq.id)}
-                      style={{
-                        ...styles.faqQuestion,
-                        color: isDark ? '#f1f5f9' : '#1e293b',
-                      }}
+                      style={styles.faqQuestion}
                     >
                       <div style={styles.faqQuestionContent}>
-                        <span style={styles.faqQuestionText}>{faq.question}</span>
+                        <span style={{
+                          ...styles.faqQuestionText,
+                          color: isDark ? '#f1f5f9' : '#1e293b',
+                        }}>{faq.question}</span>
                         {faq.tags && (
                           <div style={styles.faqTags}>
                             {faq.tags.slice(0, 2).map(tag => (
@@ -319,7 +298,7 @@ export default function AdminAide() {
                         color: isDark ? '#94a3b8' : '#475569',
                       }}>
                         <p>{faq.answer}</p>
-                        {faq.steps && (
+                        {faq.steps && faq.steps.length > 0 && (
                           <div style={{
                             ...styles.steps,
                             backgroundColor: isDark ? '#0f172a' : '#f8fafc',
@@ -339,10 +318,7 @@ export default function AdminAide() {
                             </ol>
                           </div>
                         )}
-                        <div style={{
-                          ...styles.faqMeta,
-                          borderTop: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-                        }}>
+                        <div style={styles.faqMeta}>
                           <span style={{
                             ...styles.faqCategory,
                             color: isDark ? '#94a3b8' : '#94a3b8',
@@ -390,10 +366,7 @@ export default function AdminAide() {
           backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderColor: isDark ? '#334155' : '#e2e8f0',
         }}>
-          <div style={{
-            ...styles.sectionHeader,
-            borderBottom: `2px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-          }}>
+          <div style={styles.sectionHeader}>
             <Mail size={24} style={styles.sectionIcon} />
             <div>
               <h2 style={{
@@ -405,11 +378,7 @@ export default function AdminAide() {
                 color: isDark ? '#94a3b8' : '#64748b',
               }}>Besoin d'aide supplémentaire ?</p>
             </div>
-            <span style={{
-              ...styles.supportStatus,
-              backgroundColor: isDark ? '#0f172a' : '#d1fae5',
-              color: isDark ? '#a7f3d0' : '#065f46',
-            }}>🟢 Disponible</span>
+            <span style={styles.supportStatus}>🟢 Disponible</span>
           </div>
 
           <div style={styles.contactMethods}>
@@ -478,25 +447,22 @@ export default function AdminAide() {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
         .faq-question:hover {
-          color: #2563eb;
+          color: #059669;
         }
         .contact-card:hover {
-          border-color: #2563eb !important;
+          border-color: #059669 !important;
           transform: translateY(-2px);
-          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+          box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
         }
         .copy-button:hover {
           background: rgba(255,255,255,0.3);
           transform: translateY(-1px);
         }
         .clear-search:hover {
-          background: var(--hover-bg, #f1f5f9) !important;
+          background: var(--hover-bg, #f1f5f9);
         }
         .clear-button:hover {
-          background: var(--hover-bg, #e2e8f0) !important;
-        }
-        .faq-useful:hover {
-          background: var(--hover-bg, #e2e8f0) !important;
+          background: var(--hover-bg, #e2e8f0);
         }
         
         @media (max-width: 768px) {
@@ -507,7 +473,7 @@ export default function AdminAide() {
           .categories { justify-content: center; }
           .contact-methods { grid-template-columns: 1fr; }
           .section-header { flex-direction: column; align-items: flex-start; }
-          .section-badge, .support-status { margin-left: 0; }
+          .section-badge, .popular-icon, .support-status { margin-left: 0; }
           .faq-question-content { flex-direction: column; align-items: flex-start; gap: 6px; }
           .faq-meta { flex-wrap: wrap; }
           .search-shortcut { display: none; }
@@ -526,8 +492,6 @@ const styles = {
     minHeight: '100vh',
     transition: 'all 0.3s ease',
   },
-
-  // Header
   header: {
     display: 'flex',
     alignItems: 'center',
@@ -536,7 +500,7 @@ const styles = {
     padding: '28px 32px',
     borderRadius: '20px',
     color: 'white',
-    boxShadow: '0 8px 32px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 8px 32px rgba(5, 150, 105, 0.3)',
   },
   headerIcon: {
     background: 'rgba(255,255,255,0.2)',
@@ -545,34 +509,23 @@ const styles = {
     backdropFilter: 'blur(10px)',
   },
   headerContent: { flex: 1 },
-  title: {
-    fontSize: '28px',
-    fontWeight: 700,
-    margin: '0 0 4px 0',
-    fontFamily: '"Poppins", "Inter", sans-serif',
-  },
-  subtitle: {
-    fontSize: '14px',
-    margin: 0,
-    opacity: 0.9,
-  },
+  title: { fontSize: '28px', fontWeight: 700, margin: '0 0 4px 0', fontFamily: '"Poppins", "Inter", sans-serif' },
+  subtitle: { fontSize: '14px', margin: 0, opacity: 0.9 },
   copyButton: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '8px 16px',
-    background: 'rgba(255,255,255,0.2)',
-    border: '1px solid rgba(255,255,255,0.3)',
     borderRadius: '40px',
-    color: 'white',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 500,
     transition: 'all 0.2s ease',
     backdropFilter: 'blur(10px)',
+    background: 'rgba(255,255,255,0.2)',
+    border: '1px solid rgba(255,255,255,0.3)',
+    color: 'white',
   },
-
-  // Search
   searchContainer: {
     position: 'relative',
     marginBottom: '24px',
@@ -620,8 +573,6 @@ const styles = {
     fontFamily: 'monospace',
     fontWeight: 500,
   },
-
-  // Categories
   categories: {
     display: 'flex',
     gap: '10px',
@@ -640,8 +591,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: 500,
   },
-
-  // Results
   searchResults: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -657,21 +606,12 @@ const styles = {
     fontSize: '12px',
     transition: 'all 0.2s ease',
   },
-
-  // Grid
-  grid: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-
-  // Section
+  grid: { display: 'flex', flexDirection: 'column', gap: '24px' },
   section: {
     borderRadius: '16px',
     padding: '24px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    transition: 'all 0.3s ease',
   },
   sectionHeader: {
     display: 'flex',
@@ -682,12 +622,14 @@ const styles = {
     borderBottom: '2px solid #f1f5f9',
     flexWrap: 'wrap',
   },
-  sectionIcon: { color: '#2563eb' },
+  sectionIcon: { color: '#059669' },
   sectionTitle: { fontSize: '20px', fontWeight: 600, margin: 0 },
   sectionDesc: { fontSize: '13px', margin: '2px 0 0 0' },
   sectionBadge: {
     marginLeft: 'auto',
     padding: '4px 12px',
+    backgroundColor: '#ecfdf5',
+    color: '#059669',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
@@ -695,21 +637,14 @@ const styles = {
   supportStatus: {
     marginLeft: 'auto',
     padding: '4px 12px',
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 500,
   },
-
-  // FAQ
-  faqList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  faqItem: {
-    borderBottom: '1px solid #f1f5f9',
-    transition: 'all 0.2s ease',
-  },
+  faqList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  faqItem: { borderBottom: '1px solid #f1f5f9', transition: 'all 0.2s ease' },
   faqQuestion: {
     width: '100%',
     display: 'flex',
@@ -723,91 +658,31 @@ const styles = {
     fontWeight: 500,
     textAlign: 'left',
     transition: 'all 0.2s ease',
+    color: '#1e293b',
   },
-  faqQuestionContent: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    flexWrap: 'wrap',
-  },
+  faqQuestionContent: { flex: 1, display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
   faqQuestionText: { flex: 1 },
   faqTags: { display: 'flex', gap: '6px' },
-  faqTag: {
-    fontSize: '10px',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontWeight: 400,
-  },
+  faqTag: { fontSize: '10px', padding: '2px 8px', borderRadius: '12px', fontWeight: 400 },
   faqIcon: { color: '#94a3b8', flexShrink: 0 },
-  faqAnswer: {
-    padding: '0 0 16px 0',
-    lineHeight: '1.7',
-    fontSize: '14px',
-  },
-  steps: {
-    marginTop: '12px',
-    padding: '14px 18px',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0',
-  },
-  stepsTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
-    marginBottom: '8px',
-  },
-  stepsList: {
-    margin: 0,
-    paddingLeft: '20px',
-    fontSize: '13px',
-    lineHeight: '1.8',
-  },
-  faqMeta: {
-    display: 'flex',
-    gap: '16px',
-    marginTop: '12px',
-    paddingTop: '12px',
-    borderTop: '1px solid #f1f5f9',
-    alignItems: 'center',
-  },
-  faqCategory: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    fontSize: '12px',
-  },
-  faqUseful: {
-    padding: '4px 12px',
-    border: 'none',
-    borderRadius: '20px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    transition: 'all 0.2s ease',
-    marginLeft: 'auto',
-  },
-
-  // No Results
-  noResults: {
-    textAlign: 'center',
-    padding: '40px 20px',
-  },
+  faqAnswer: { padding: '0 0 16px 0', lineHeight: '1.7', fontSize: '14px' },
+  steps: { marginTop: '12px', padding: '14px 18px', borderRadius: '10px', border: '1px solid #e2e8f0' },
+  stepsTitle: { fontSize: '13px', fontWeight: 600, marginBottom: '8px' },
+  stepsList: { margin: 0, paddingLeft: '20px', fontSize: '13px', lineHeight: '1.8' },
+  faqMeta: { display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', alignItems: 'center' },
+  faqCategory: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' },
+  faqUseful: { padding: '4px 12px', border: 'none', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s ease', marginLeft: 'auto' },
+  noResults: { textAlign: 'center', padding: '40px 20px' },
   noResultsIcon: { color: '#cbd5e1', marginBottom: '16px' },
   noResultsTitle: { fontSize: '18px', fontWeight: 600, marginBottom: '8px' },
   noResultsDesc: { fontSize: '14px', marginBottom: '16px' },
-
-  // Support
   supportSection: {
     borderRadius: '16px',
     padding: '24px',
     border: '1px solid #e2e8f0',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    transition: 'all 0.3s ease',
   },
-  contactMethods: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '16px',
-  },
+  contactMethods: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
   contactCard: {
     display: 'flex',
     alignItems: 'center',
@@ -817,13 +692,8 @@ const styles = {
     border: '1px solid #e2e8f0',
     transition: 'all 0.2s ease',
   },
-  contactIcon: { color: '#2563eb', flexShrink: 0 },
-  contactLabel: {
-    fontSize: '11px',
-    marginBottom: '2px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
+  contactIcon: { color: '#059669', flexShrink: 0 },
+  contactLabel: { fontSize: '11px', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' },
   contactValue: { fontSize: '14px', fontWeight: 600 },
   contactDesc: { fontSize: '11px', marginTop: '4px' },
 };

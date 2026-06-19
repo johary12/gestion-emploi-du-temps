@@ -1,4 +1,4 @@
-// src/pagesAdmin/AdminEtudiants.jsx - Version avec mode sombre
+// src/pagesAdmin/AdminEtudiants.jsx - Version complète avec tous les parcours
 import { useState, useEffect } from 'react';
 import { etudiantService } from '../services/api';
 import { 
@@ -9,8 +9,26 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
+// Niveaux d'études
 const NIVEAUX = ['L1', 'L2', 'L3', 'M1', 'M2'];
-const PARCOURS = ['Génie Logiciel', 'Réseaux & Télécoms', "Systèmes d'Information", 'Sécurité Informatique'];
+
+// Parcours complets selon les filières
+const PARCOURS = [
+  'Génie Logiciel (GB)',
+  'Administration Système et Réseaux (ASR)',
+  'Informatique Générale (IG)',
+  'Intelligence Artificielle et Science des Données (IASDM)',
+  'Cybersécurité'
+];
+
+// Structure des parcours par niveau
+const PARCOURS_BY_NIVEAU = {
+  'L1': ['Génie Logiciel (GB)', 'Administration Système et Réseaux (ASR)', 'Informatique Générale (IG)'],
+  'L2': ['Génie Logiciel (GB)', 'Administration Système et Réseaux (ASR)', 'Informatique Générale (IG)'],
+  'L3': ['Génie Logiciel (GB)', 'Administration Système et Réseaux (ASR)', 'Informatique Générale (IG)'],
+  'M1': ['Génie Logiciel (GB)', 'Administration Système et Réseaux (ASR)', 'Informatique Générale (IG)', 'Intelligence Artificielle et Science des Données (IASDM)', 'Cybersécurité'],
+  'M2': ['Génie Logiciel (GB)', 'Administration Système et Réseaux (ASR)', 'Informatique Générale (IG)', 'Intelligence Artificielle et Science des Données (IASDM)', 'Cybersécurité']
+};
 
 export default function AdminEtudiants() {
   const { theme } = useTheme();
@@ -20,7 +38,12 @@ export default function AdminEtudiants() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState({ show: false, type: '', message: '' });
-  const [form, setForm] = useState({ nom: '', email: '', niveau: 'L1', parcours: 'Génie Logiciel' });
+  const [form, setForm] = useState({ 
+    nom: '', 
+    email: '', 
+    niveau: 'L1', 
+    parcours: 'Génie Logiciel (GB)' 
+  });
   const [errors, setErrors] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [filterNiveau, setFilterNiveau] = useState('');
@@ -37,6 +60,16 @@ export default function AdminEtudiants() {
   const [deleteName, setDeleteName] = useState('');
 
   useEffect(() => { loadEtudiants(); }, []);
+
+  // Mettre à jour les parcours disponibles lorsque le niveau change
+  useEffect(() => {
+    if (form.niveau && PARCOURS_BY_NIVEAU[form.niveau]) {
+      const availableParcours = PARCOURS_BY_NIVEAU[form.niveau];
+      if (!availableParcours.includes(form.parcours)) {
+        setForm(prev => ({ ...prev, parcours: availableParcours[0] || '' }));
+      }
+    }
+  }, [form.niveau]);
 
   const loadEtudiants = async () => {
     setLoading(true);
@@ -128,6 +161,7 @@ export default function AdminEtudiants() {
     if (!form.nom?.trim()) newErrors.nom = 'Le nom est requis';
     if (!form.email?.trim()) newErrors.email = 'L\'email est requis';
     else if (!emailValid) newErrors.email = 'Email invalide (ex: nom@domaine.com)';
+    if (!form.parcours) newErrors.parcours = 'Le parcours est requis';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -154,14 +188,12 @@ export default function AdminEtudiants() {
     }
   };
 
-  // Ouvrir le modal de suppression
   const openDeleteModal = (id, nom) => {
     setDeleteId(id);
     setDeleteName(nom);
     setShowDeleteModal(true);
   };
 
-  // Confirmer la suppression
   const confirmDelete = async () => {
     setLoading(true);
     try { 
@@ -192,7 +224,12 @@ export default function AdminEtudiants() {
   
   const resetForm = () => { 
     setEditId(null); 
-    setForm({ nom: '', email: '', niveau: 'L1', parcours: 'Génie Logiciel' }); 
+    setForm({ 
+      nom: '', 
+      email: '', 
+      niveau: 'L1', 
+      parcours: 'Génie Logiciel (GB)' 
+    }); 
     setErrors({});
     setIsEmailTouched(false);
     setEmailStrength(0);
@@ -229,6 +266,11 @@ export default function AdminEtudiants() {
 
   const totalEtudiants = etudiants.length;
 
+  // Obtenir les parcours disponibles pour le niveau sélectionné
+  const getAvailableParcours = () => {
+    return form.niveau ? PARCOURS_BY_NIVEAU[form.niveau] || [] : [];
+  };
+
   return (
     <div style={{
       ...styles.container,
@@ -252,7 +294,7 @@ export default function AdminEtudiants() {
           <h1 style={{
             ...styles.pageTitle,
             color: 'var(--text-primary, #1e293b)',
-          }}>👨‍🎓 Gestion des étudiants</h1>
+          }}>Gestion des étudiants</h1>
           <p style={{
             ...styles.pageSubtitle,
             color: 'var(--text-secondary, #64748b)',
@@ -631,7 +673,7 @@ export default function AdminEtudiants() {
         )}
       </div>
 
-      {/* Modal d'ajout/modification avec étoiles rouges */}
+      {/* Modal d'ajout/modification */}
       {showModal && (
         <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
           <div style={{
@@ -773,7 +815,7 @@ export default function AdminEtudiants() {
                     color: 'var(--text-primary, #1e293b)',
                   }}
                 >
-                  {NIVEAUX.map(n => <option key={n}>{n}</option>)}
+                  {NIVEAUX.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
 
@@ -795,8 +837,18 @@ export default function AdminEtudiants() {
                     color: 'var(--text-primary, #1e293b)',
                   }}
                 >
-                  {PARCOURS.map(p => <option key={p}>{p}</option>)}
+                  {getAvailableParcours().map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
                 </select>
+                {errors.parcours && <div style={styles.fieldError}>{errors.parcours}</div>}
+                <div style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted, #94a3b8)',
+                  marginTop: '4px'
+                }}>
+                  ℹ️ Les parcours disponibles dépendent du niveau sélectionné
+                </div>
               </div>
             </div>
 
@@ -819,7 +871,7 @@ export default function AdminEtudiants() {
                     Chargement...
                   </>
                 ) : (
-                  '💾 Enregistrer'
+                  'Enregistrer'
                 )}
               </button>
             </div>
@@ -827,7 +879,7 @@ export default function AdminEtudiants() {
         </div>
       )}
 
-      {/* Modal de suppression personnalisé */}
+      {/* Modal de suppression */}
       {showDeleteModal && (
         <div style={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
           <div style={{
@@ -904,7 +956,7 @@ export default function AdminEtudiants() {
   );
 }
 
-// Styles avec charte graphique et variables CSS
+// Styles
 const styles = {
   container: {
     padding: '24px 32px',
@@ -914,7 +966,6 @@ const styles = {
     minHeight: '100vh',
   },
 
-  // Notification
   notification: {
     position: 'fixed',
     top: '24px',
@@ -934,7 +985,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Header
   headerSection: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -985,7 +1035,6 @@ const styles = {
     boxShadow: '0 4px 6px rgba(37, 99, 235, 0.2)',
   },
 
-  // Stats
   statsContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -1013,7 +1062,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Stats detail
   statsDetailContainer: {
     marginBottom: '24px',
   },
@@ -1049,7 +1097,6 @@ const styles = {
     textAlign: 'center',
   },
 
-  // Search
   searchSection: {
     marginBottom: '24px',
   },
@@ -1087,7 +1134,6 @@ const styles = {
     transition: 'all 0.2s ease',
   },
 
-  // Filters
   filtersPanel: {
     display: 'flex',
     alignItems: 'flex-end',
@@ -1128,7 +1174,6 @@ const styles = {
     whiteSpace: 'nowrap',
   },
 
-  // Table
   tableContainer: {
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
@@ -1175,7 +1220,6 @@ const styles = {
     verticalAlign: 'middle',
   },
 
-  // Student name
   etudiantNameContainer: {
     display: 'flex',
     alignItems: 'center',
@@ -1198,7 +1242,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Email
   emailContainer: {
     display: 'flex',
     alignItems: 'center',
@@ -1209,7 +1252,6 @@ const styles = {
     color: '#94a3b8',
   },
 
-  // Badges
   niveauBadge: {
     display: 'inline-block',
     padding: '4px 12px',
@@ -1225,7 +1267,6 @@ const styles = {
     fontWeight: 500,
   },
 
-  // Actions
   actionsContainer: {
     display: 'flex',
     gap: '8px',
@@ -1249,7 +1290,6 @@ const styles = {
     alignItems: 'center',
   },
 
-  // Empty state
   emptyRow: {
     padding: '40px 20px',
   },
@@ -1270,7 +1310,6 @@ const styles = {
     fontSize: '14px',
   },
 
-  // Loading
   loadingContainer: {
     display: 'flex',
     flexDirection: 'column',
@@ -1296,7 +1335,6 @@ const styles = {
     animation: 'spin 0.8s linear infinite',
   },
 
-  // Modal principal
   modalOverlay: {
     position: 'fixed',
     inset: 0,
@@ -1352,7 +1390,6 @@ const styles = {
     borderTop: '1px solid #e2e8f0',
   },
 
-  // Form
   formGroup: {
     marginBottom: '16px',
   },
@@ -1424,7 +1461,6 @@ const styles = {
     gap: '4px',
   },
 
-  // Buttons
   cancelBtn: {
     padding: '10px 24px',
     borderRadius: '40px',
@@ -1449,7 +1485,6 @@ const styles = {
     gap: '8px',
   },
 
-  // Delete Modal
   deleteModalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1521,7 +1556,7 @@ const styles = {
   },
 };
 
-// Animations et styles globaux
+// Animations
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = `
@@ -1621,24 +1656,6 @@ if (typeof document !== 'undefined') {
       background-color: #b91c1c !important;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
-    }
-
-    /* Scrollbar */
-    .modal-body::-webkit-scrollbar {
-      width: 4px;
-    }
-    
-    .modal-body::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    
-    .modal-body::-webkit-scrollbar-thumb {
-      background: var(--text-muted, #cbd5e1);
-      borderRadius: 4px;
-    }
-    
-    .modal-body::-webkit-scrollbar-thumb:hover {
-      background: var(--text-secondary, #94a3b8);
     }
 
     @media (max-width: 768px) {

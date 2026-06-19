@@ -1,14 +1,15 @@
-// src/pagesAdmin/AdminParametre.jsx - Version avec sections supprimées
+// src/pagesProf/ProfParametre.jsx
 import { useState, useEffect } from 'react';
 import {
-  Save, Lock, Palette, Moon, Sun, Monitor,
+  Save, Lock, Palette, Sun, Moon,
   User, Eye, EyeOff, CheckCircle, AlertCircle,
-  X, Clock, Wifi, Server, HardDrive
+  Database, Download, Upload, Trash2, X,
+  Clock, Wifi, Server, HardDrive
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-export default function AdminParametre() {
+export default function ProfParametre() {
   const { user, changePassword } = useAuth();
   const { theme, toggleTheme } = useTheme();
   
@@ -29,17 +30,16 @@ export default function AdminParametre() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState({});
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   const isDark = theme === 'dark';
 
-  // Charger les paramètres sauvegardés
   useEffect(() => {
     loadSettings();
   }, []);
 
-  // Mettre à jour le thème quand il change
   useEffect(() => {
     if (settings.theme !== theme) {
       toggleTheme(settings.theme);
@@ -48,11 +48,11 @@ export default function AdminParametre() {
 
   const loadSettings = () => {
     try {
-      const savedSettings = localStorage.getItem('adminSettings');
+      const savedSettings = localStorage.getItem('profSettings');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({
-          ...prev,
+        setSettings(prev => ({ 
+          ...prev, 
           ...parsed,
           theme: theme || parsed.theme || 'light'
         }));
@@ -64,7 +64,7 @@ export default function AdminParametre() {
 
   const saveSettingsToStorage = (newSettings) => {
     try {
-      localStorage.setItem('adminSettings', JSON.stringify(newSettings));
+      localStorage.setItem('profSettings', JSON.stringify(newSettings));
       return true;
     } catch (error) {
       console.error('Erreur sauvegarde paramètres:', error);
@@ -95,12 +95,10 @@ export default function AdminParametre() {
     setSaved(false);
     setSaveError(false);
     
-    // Si le thème change, appliquer immédiatement
     if (key === 'theme') {
       toggleTheme(value);
     }
     
-    // Sauvegarde automatique si activée
     if (settings.autoSave) {
       saveSettingsToStorage(newSettings);
       setSaved(true);
@@ -146,7 +144,6 @@ export default function AdminParametre() {
     
     setPasswordLoading(true);
     try {
-      // Appel API pour changer le mot de passe
       await changePassword(passwordData.currentPassword, passwordData.newPassword);
       
       setShowPasswordModal(false);
@@ -172,6 +169,130 @@ export default function AdminParametre() {
     }
   };
 
+  const handleDataAction = (action) => {
+    setShowConfirmModal(true);
+    window.pendingAction = action;
+  };
+
+  const confirmDataAction = () => {
+    const action = window.pendingAction;
+    setShowConfirmModal(false);
+    
+    switch(action) {
+      case 'export':
+        exportData();
+        break;
+      case 'import':
+        importData();
+        break;
+      case 'delete':
+        deleteData();
+        break;
+      default:
+        break;
+    }
+  };
+
+  const exportData = () => {
+    try {
+      const data = {
+        settings: settings,
+        user: { name: user?.name, email: user?.email },
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `parametres_prof_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setSaved(true);
+      setSaveMessage('Données exportées avec succès !');
+      setTimeout(() => {
+        setSaved(false);
+        setSaveMessage('');
+      }, 3000);
+    } catch (error) {
+      setSaveError(true);
+      setSaveMessage('Erreur lors de l\'export');
+      setTimeout(() => {
+        setSaveError(false);
+        setSaveMessage('');
+      }, 3000);
+    }
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const data = JSON.parse(event.target.result);
+          if (data.settings) {
+            setSettings(data.settings);
+            saveSettingsToStorage(data.settings);
+            if (data.settings.theme) {
+              toggleTheme(data.settings.theme);
+            }
+            setSaved(true);
+            setSaveMessage('Données importées avec succès !');
+            setTimeout(() => {
+              setSaved(false);
+              setSaveMessage('');
+            }, 3000);
+          }
+        } catch (error) {
+          setSaveError(true);
+          setSaveMessage('Erreur lors de l\'import');
+          setTimeout(() => {
+            setSaveError(false);
+            setSaveMessage('');
+          }, 3000);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const deleteData = () => {
+    try {
+      localStorage.removeItem('profSettings');
+      const defaultSettings = {
+        theme: 'light',
+        autoSave: true
+      };
+      setSettings(defaultSettings);
+      saveSettingsToStorage(defaultSettings);
+      toggleTheme('light');
+      
+      setSaved(true);
+      setSaveMessage('Données supprimées avec succès !');
+      setTimeout(() => {
+        setSaved(false);
+        setSaveMessage('');
+      }, 3000);
+    } catch (error) {
+      setSaveError(true);
+      setSaveMessage('Erreur lors de la suppression');
+      setTimeout(() => {
+        setSaveError(false);
+        setSaveMessage('');
+      }, 3000);
+    }
+  };
+
   return (
     <div style={{
       ...styles.container,
@@ -181,14 +302,8 @@ export default function AdminParametre() {
       {/* En-tête */}
       <div style={styles.header}>
         <div>
-          <h1 style={{
-            ...styles.pageTitle,
-            color: isDark ? '#f1f5f9' : '#1e293b',
-          }}>⚙️ Paramètres</h1>
-          <p style={{
-            ...styles.pageSubtitle,
-            color: isDark ? '#94a3b8' : '#64748b',
-          }}>Gérez vos préférences et configurations</p>
+          <h1 style={styles.pageTitle}>⚙️ Paramètres</h1>
+          <p style={styles.pageSubtitle}>Gérez vos préférences et configurations</p>
         </div>
         <button onClick={handleSave} style={styles.saveHeaderButton} disabled={isLoading}>
           <Save size={18} />
@@ -216,38 +331,27 @@ export default function AdminParametre() {
           ...styles.section,
           backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderColor: isDark ? '#334155' : '#e2e8f0',
+          boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
         }}>
-          <div style={{
-            ...styles.sectionHeader,
-            borderBottom: `2px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-          }}>
+          <div style={styles.sectionHeader}>
             <Palette size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={{
-                ...styles.sectionTitle,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>Apparence</h2>
-              <p style={{
-                ...styles.sectionDesc,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Personnalisez l'apparence de l'application</p>
+              <h2 style={styles.sectionTitle}>Apparence</h2>
+              <p style={styles.sectionDesc}>Personnalisez l'apparence de l'application</p>
             </div>
           </div>
 
           <div style={styles.options}>
             <div style={styles.optionGroup}>
-              <div style={{
-                ...styles.labelTitle,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>Thème</div>
+              <div style={styles.labelTitle}>Thème</div>
               <div style={styles.themeButtons}>
                 <button
                   onClick={() => handleChange("theme", "light")}
                   style={{
                     ...styles.themeButton,
-                    backgroundColor: settings.theme === "light" ? '#2563eb' : (isDark ? '#1e293b' : '#f8fafc'),
+                    backgroundColor: settings.theme === "light" ? '#059669' : (isDark ? '#1e293b' : '#f8fafc'),
                     color: settings.theme === "light" ? 'white' : (isDark ? '#94a3b8' : '#475569'),
-                    borderColor: settings.theme === "light" ? '#2563eb' : (isDark ? '#334155' : '#e2e8f0')
+                    borderColor: settings.theme === "light" ? '#059669' : (isDark ? '#334155' : '#e2e8f0')
                   }}
                 >
                   <Sun size={18} />
@@ -257,39 +361,21 @@ export default function AdminParametre() {
                   onClick={() => handleChange("theme", "dark")}
                   style={{
                     ...styles.themeButton,
-                    backgroundColor: settings.theme === "dark" ? '#2563eb' : (isDark ? '#1e293b' : '#f8fafc'),
+                    backgroundColor: settings.theme === "dark" ? '#059669' : (isDark ? '#1e293b' : '#f8fafc'),
                     color: settings.theme === "dark" ? 'white' : (isDark ? '#94a3b8' : '#475569'),
-                    borderColor: settings.theme === "dark" ? '#2563eb' : (isDark ? '#334155' : '#e2e8f0')
+                    borderColor: settings.theme === "dark" ? '#059669' : (isDark ? '#334155' : '#e2e8f0')
                   }}
                 >
                   <Moon size={18} />
                   Sombre
-                </button>
-                <button
-                  onClick={() => handleChange("theme", "system")}
-                  style={{
-                    ...styles.themeButton,
-                    backgroundColor: settings.theme === "system" ? '#2563eb' : (isDark ? '#1e293b' : '#f8fafc'),
-                    color: settings.theme === "system" ? 'white' : (isDark ? '#94a3b8' : '#475569'),
-                    borderColor: settings.theme === "system" ? '#2563eb' : (isDark ? '#334155' : '#e2e8f0')
-                  }}
-                >
-                  <Monitor size={18} />
-                  Système
                 </button>
               </div>
             </div>
 
             <label style={styles.switchLabel}>
               <div>
-                <div style={{
-                  ...styles.labelTitle,
-                  color: isDark ? '#f1f5f9' : '#1e293b',
-                }}>Sauvegarde automatique</div>
-                <div style={{
-                  ...styles.labelDesc,
-                  color: isDark ? '#94a3b8' : '#64748b',
-                }}>Sauvegarder automatiquement vos paramètres</div>
+                <div style={styles.labelTitle}>Sauvegarde automatique</div>
+                <div style={styles.labelDesc}>Sauvegarder automatiquement vos paramètres</div>
               </div>
               <div style={styles.switchContainer}>
                 <input
@@ -300,7 +386,7 @@ export default function AdminParametre() {
                 />
                 <div style={{
                   ...styles.switchSlider,
-                  backgroundColor: settings.autoSave ? '#2563eb' : (isDark ? '#475569' : '#cbd5e1')
+                  backgroundColor: settings.autoSave ? '#059669' : (isDark ? '#475569' : '#cbd5e1')
                 }}>
                   <div style={{
                     ...styles.switchCircle,
@@ -318,21 +404,13 @@ export default function AdminParametre() {
           ...styles.section,
           backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderColor: isDark ? '#334155' : '#e2e8f0',
+          boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
         }}>
-          <div style={{
-            ...styles.sectionHeader,
-            borderBottom: `2px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-          }}>
+          <div style={styles.sectionHeader}>
             <Lock size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={{
-                ...styles.sectionTitle,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>Sécurité</h2>
-              <p style={{
-                ...styles.sectionDesc,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Protégez votre compte</p>
+              <h2 style={styles.sectionTitle}>Sécurité</h2>
+              <p style={styles.sectionDesc}>Protégez votre compte</p>
             </div>
           </div>
 
@@ -352,26 +430,75 @@ export default function AdminParametre() {
           </div>
         </div>
 
+        {/* Section Données */}
+        <div style={{
+          ...styles.section,
+          backgroundColor: isDark ? '#1e293b' : '#ffffff',
+          borderColor: isDark ? '#334155' : '#e2e8f0',
+          boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+        }}>
+          <div style={styles.sectionHeader}>
+            <Database size={24} style={styles.sectionIcon} />
+            <div>
+              <h2 style={styles.sectionTitle}>Données</h2>
+              <p style={styles.sectionDesc}>Gérez vos données</p>
+            </div>
+          </div>
+
+          <div style={styles.options}>
+            <div style={styles.buttonGroup}>
+              <button 
+                onClick={() => handleDataAction('export')} 
+                style={{
+                  ...styles.dataButton,
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  borderColor: isDark ? '#334155' : '#e2e8f0',
+                  color: isDark ? '#f1f5f9' : '#475569',
+                }}
+              >
+                <Download size={16} />
+                Exporter les données
+              </button>
+              <button 
+                onClick={() => handleDataAction('import')} 
+                style={{
+                  ...styles.dataButton,
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  borderColor: isDark ? '#334155' : '#e2e8f0',
+                  color: isDark ? '#f1f5f9' : '#475569',
+                }}
+              >
+                <Upload size={16} />
+                Importer les données
+              </button>
+              <button 
+                onClick={() => handleDataAction('delete')} 
+                style={{
+                  ...styles.dataButton,
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  borderColor: isDark ? '#334155' : '#e2e8f0',
+                  color: '#dc2626',
+                }}
+              >
+                <Trash2 size={16} />
+                Supprimer les données
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Section Système */}
         <div style={{
           ...styles.section,
           backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderColor: isDark ? '#334155' : '#e2e8f0',
+          boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
         }}>
-          <div style={{
-            ...styles.sectionHeader,
-            borderBottom: `2px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-          }}>
+          <div style={styles.sectionHeader}>
             <Server size={24} style={styles.sectionIcon} />
             <div>
-              <h2 style={{
-                ...styles.sectionTitle,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>Système</h2>
-              <p style={{
-                ...styles.sectionDesc,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Informations sur le système</p>
+              <h2 style={styles.sectionTitle}>Système</h2>
+              <p style={styles.sectionDesc}>Informations sur le système</p>
             </div>
           </div>
 
@@ -381,38 +508,23 @@ export default function AdminParametre() {
               backgroundColor: isDark ? '#0f172a' : '#f8fafc',
             }}>
               <HardDrive size={16} style={styles.systemIcon} />
-              <span style={{
-                ...styles.systemLabel,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Version:</span>
-              <span style={{
-                ...styles.systemValue,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>1.0.0</span>
+              <span style={styles.systemLabel}>Version:</span>
+              <span style={styles.systemValue}>1.0.0</span>
             </div>
             <div style={{
               ...styles.systemItem,
               backgroundColor: isDark ? '#0f172a' : '#f8fafc',
             }}>
               <Clock size={16} style={styles.systemIcon} />
-              <span style={{
-                ...styles.systemLabel,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Dernière mise à jour:</span>
-              <span style={{
-                ...styles.systemValue,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>{new Date().toLocaleDateString('fr-FR')}</span>
+              <span style={styles.systemLabel}>Dernière mise à jour:</span>
+              <span style={styles.systemValue}>{new Date().toLocaleDateString('fr-FR')}</span>
             </div>
             <div style={{
               ...styles.systemItem,
               backgroundColor: isDark ? '#0f172a' : '#f8fafc',
             }}>
               <Wifi size={16} style={styles.systemIcon} />
-              <span style={{
-                ...styles.systemLabel,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Statut:</span>
+              <span style={styles.systemLabel}>Statut:</span>
               <span style={{...styles.systemValue, color: '#10b981'}}>Connecté</span>
             </div>
             <div style={{
@@ -420,14 +532,8 @@ export default function AdminParametre() {
               backgroundColor: isDark ? '#0f172a' : '#f8fafc',
             }}>
               <User size={16} style={styles.systemIcon} />
-              <span style={{
-                ...styles.systemLabel,
-                color: isDark ? '#94a3b8' : '#64748b',
-              }}>Utilisateur:</span>
-              <span style={{
-                ...styles.systemValue,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>{user?.name || 'Administrateur'}</span>
+              <span style={styles.systemLabel}>Utilisateur:</span>
+              <span style={styles.systemValue}>{user?.name || user?.nom || 'Professeur'}</span>
             </div>
           </div>
         </div>
@@ -437,9 +543,9 @@ export default function AdminParametre() {
           onClick={handleSave} 
           style={{
             ...styles.saveButton,
-            backgroundColor: '#2563eb',
+            backgroundColor: '#059669',
             color: 'white',
-            boxShadow: '0 4px 6px rgba(37, 99, 235, 0.2)',
+            boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)',
           }}
           disabled={isLoading}
         >
@@ -458,19 +564,10 @@ export default function AdminParametre() {
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{
               ...styles.modalHeader,
-              borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+              borderColor: isDark ? '#334155' : '#e2e8f0',
             }}>
-              <h3 style={{
-                ...styles.modalTitle,
-                color: isDark ? '#f1f5f9' : '#1e293b',
-              }}>🔒 Changer le mot de passe</h3>
-              <button 
-                style={{
-                  ...styles.modalClose,
-                  color: isDark ? '#94a3b8' : '#94a3b8',
-                }} 
-                onClick={() => setShowPasswordModal(false)}
-              >
+              <h3 style={styles.modalTitle}>🔒 Changer le mot de passe</h3>
+              <button style={styles.modalClose} onClick={() => setShowPasswordModal(false)}>
                 <X size={20} />
               </button>
             </div>
@@ -478,10 +575,7 @@ export default function AdminParametre() {
             <form onSubmit={handlePasswordChange}>
               <div style={styles.modalBody}>
                 <div style={styles.formGroup}>
-                  <label style={{
-                    ...styles.formLabel,
-                    color: isDark ? '#f1f5f9' : '#1e293b',
-                  }}>Mot de passe actuel</label>
+                  <label style={styles.formLabel}>Mot de passe actuel</label>
                   <div style={styles.passwordInputWrapper}>
                     <input
                       type={showCurrentPassword ? "text" : "password"}
@@ -510,10 +604,7 @@ export default function AdminParametre() {
                 </div>
 
                 <div style={styles.formGroup}>
-                  <label style={{
-                    ...styles.formLabel,
-                    color: isDark ? '#f1f5f9' : '#1e293b',
-                  }}>Nouveau mot de passe</label>
+                  <label style={styles.formLabel}>Nouveau mot de passe</label>
                   <div style={styles.passwordInputWrapper}>
                     <input
                       type={showNewPassword ? "text" : "password"}
@@ -542,10 +633,7 @@ export default function AdminParametre() {
                 </div>
 
                 <div style={styles.formGroup}>
-                  <label style={{
-                    ...styles.formLabel,
-                    color: isDark ? '#f1f5f9' : '#1e293b',
-                  }}>Confirmer le nouveau mot de passe</label>
+                  <label style={styles.formLabel}>Confirmer le nouveau mot de passe</label>
                   <input
                     type="password"
                     value={passwordData.confirmPassword}
@@ -567,7 +655,7 @@ export default function AdminParametre() {
 
               <div style={{
                 ...styles.modalFooter,
-                borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+                borderColor: isDark ? '#334155' : '#e2e8f0',
               }}>
                 <button type="button" onClick={() => setShowPasswordModal(false)} style={{
                   ...styles.cancelButton,
@@ -579,14 +667,60 @@ export default function AdminParametre() {
                 </button>
                 <button type="submit" style={{
                   ...styles.confirmButton,
-                  backgroundColor: '#2563eb',
+                  backgroundColor: '#059669',
                   color: 'white',
-                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
+                  boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)',
                 }} disabled={passwordLoading}>
                   {passwordLoading ? 'Changement...' : 'Changer'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation */}
+      {showConfirmModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowConfirmModal(false)}>
+          <div style={{
+            ...styles.modalContent,
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            boxShadow: `0 20px 60px ${isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0, 0, 0, 0.2)'}`,
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              ...styles.modalHeader,
+              borderColor: isDark ? '#334155' : '#e2e8f0',
+            }}>
+              <h3 style={styles.modalTitle}>⚠️ Confirmation</h3>
+              <button style={styles.modalClose} onClick={() => setShowConfirmModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={styles.confirmText}>Êtes-vous sûr de vouloir effectuer cette action ?</p>
+              <p style={styles.confirmSubtext}>Cette action est irréversible.</p>
+            </div>
+            <div style={{
+              ...styles.modalFooter,
+              borderColor: isDark ? '#334155' : '#e2e8f0',
+            }}>
+              <button onClick={() => setShowConfirmModal(false)} style={{
+                ...styles.cancelButton,
+                backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                borderColor: isDark ? '#475569' : '#e2e8f0',
+                color: isDark ? '#f1f5f9' : '#475569',
+              }}>
+                Annuler
+              </button>
+              <button onClick={confirmDataAction} style={{
+                ...styles.confirmButton,
+                backgroundColor: '#dc2626',
+                color: 'white',
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+              }}>
+                Confirmer
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -604,7 +738,6 @@ const styles = {
     transition: 'all 0.3s ease',
   },
 
-  // Header
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -622,13 +755,14 @@ const styles = {
   pageSubtitle: {
     fontSize: '14px',
     margin: '4px 0 0',
+    color: '#64748b',
   },
   saveHeaderButton: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '10px 24px',
-    backgroundColor: '#2563eb',
+    backgroundColor: '#059669',
     color: 'white',
     border: 'none',
     borderRadius: '40px',
@@ -636,10 +770,9 @@ const styles = {
     fontWeight: 600,
     fontSize: '14px',
     transition: 'all 0.2s ease',
-    boxShadow: '0 4px 6px rgba(37, 99, 235, 0.2)',
+    boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)',
   },
 
-  // Notifications
   successNotification: {
     display: 'flex',
     alignItems: 'center',
@@ -665,19 +798,17 @@ const styles = {
     animation: 'slideDown 0.3s ease-out',
   },
 
-  // Content
   content: {
     display: 'flex',
     flexDirection: 'column',
     gap: '24px',
   },
 
-  // Section
   section: {
     borderRadius: '16px',
     padding: '24px',
     border: '1px solid #e2e8f0',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
     transition: 'all 0.3s ease',
   },
   sectionHeader: {
@@ -688,18 +819,26 @@ const styles = {
     paddingBottom: '16px',
     borderBottom: '2px solid #f1f5f9',
   },
-  sectionIcon: { color: '#2563eb' },
-  sectionTitle: { fontSize: '18px', fontWeight: 600, margin: 0 },
-  sectionDesc: { fontSize: '13px', margin: '2px 0 0 0' },
+  sectionIcon: {
+    color: '#059669',
+  },
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: 0,
+  },
+  sectionDesc: {
+    fontSize: '13px',
+    color: '#64748b',
+    margin: '2px 0 0 0',
+  },
 
-  // Options
   options: {
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
   },
 
-  // Switch
   switchLabel: {
     display: 'flex',
     alignItems: 'center',
@@ -715,6 +854,7 @@ const styles = {
   },
   labelDesc: {
     fontSize: '12px',
+    color: '#64748b',
     marginTop: '2px',
   },
   switchContainer: {
@@ -750,7 +890,6 @@ const styles = {
     boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
   },
 
-  // Theme
   optionGroup: {
     padding: '4px 0',
   },
@@ -773,7 +912,6 @@ const styles = {
     fontSize: '14px',
   },
 
-  // Password
   passwordButton: {
     display: 'flex',
     alignItems: 'center',
@@ -788,7 +926,24 @@ const styles = {
     width: 'fit-content',
   },
 
-  // System info
+  buttonGroup: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  dataButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 18px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    transition: 'all 0.2s ease',
+  },
+
   systemInfo: {
     display: 'flex',
     flexDirection: 'column',
@@ -802,11 +957,19 @@ const styles = {
     borderRadius: '8px',
     transition: 'all 0.2s ease',
   },
-  systemIcon: { color: '#2563eb' },
-  systemLabel: { fontSize: '13px', fontWeight: 500 },
-  systemValue: { fontSize: '13px', fontWeight: 500 },
+  systemIcon: {
+    color: '#059669',
+  },
+  systemLabel: {
+    fontSize: '13px',
+    color: '#64748b',
+    fontWeight: 500,
+  },
+  systemValue: {
+    fontSize: '13px',
+    fontWeight: 500,
+  },
 
-  // Save button
   saveButton: {
     display: 'flex',
     alignItems: 'center',
@@ -822,7 +985,6 @@ const styles = {
     marginTop: '8px',
   },
 
-  // Modal
   modalOverlay: {
     position: 'fixed',
     top: 0,
@@ -852,18 +1014,26 @@ const styles = {
     padding: '20px 24px',
     borderBottom: '1px solid #e2e8f0',
   },
-  modalTitle: { fontSize: '18px', fontWeight: 600, margin: 0 },
+  modalTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: 0,
+  },
   modalClose: {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
+    color: '#94a3b8',
     padding: '4px',
     borderRadius: '8px',
     transition: 'all 0.2s ease',
     display: 'flex',
     alignItems: 'center',
   },
-  modalBody: { padding: '24px', overflowY: 'auto' },
+  modalBody: {
+    padding: '24px',
+    overflowY: 'auto',
+  },
   modalFooter: {
     display: 'flex',
     gap: '12px',
@@ -872,8 +1042,9 @@ const styles = {
     borderTop: '1px solid #e2e8f0',
   },
 
-  // Form
-  formGroup: { marginBottom: '16px' },
+  formGroup: {
+    marginBottom: '16px',
+  },
   formLabel: {
     display: 'block',
     fontSize: '14px',
@@ -890,7 +1061,9 @@ const styles = {
     transition: 'all 0.2s ease',
     outline: 'none',
   },
-  passwordInputWrapper: { position: 'relative' },
+  passwordInputWrapper: {
+    position: 'relative',
+  },
   passwordToggle: {
     position: 'absolute',
     right: '12px',
@@ -904,9 +1077,22 @@ const styles = {
     borderRadius: '8px',
     transition: 'all 0.2s ease',
   },
-  fieldError: { fontSize: '12px', color: '#ef4444', marginTop: '4px' },
+  fieldError: {
+    fontSize: '12px',
+    color: '#ef4444',
+    marginTop: '4px',
+  },
 
-  // Buttons
+  confirmText: {
+    fontSize: '16px',
+    margin: 0,
+  },
+  confirmSubtext: {
+    fontSize: '14px',
+    color: '#64748b',
+    margin: '8px 0 0',
+  },
+
   cancelButton: {
     padding: '10px 24px',
     border: '1px solid #e2e8f0',
@@ -927,7 +1113,7 @@ const styles = {
   },
 };
 
-// Animations et styles globaux
+// Animations
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = `
@@ -942,15 +1128,15 @@ if (typeof document !== 'undefined') {
     }
 
     .save-header-button:hover:not(:disabled) {
-      background-color: #1d4ed8;
+      background-color: #047857;
       transform: translateY(-2px);
-      box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
+      box-shadow: 0 6px 12px rgba(5, 150, 105, 0.3);
     }
 
     .save-button:hover:not(:disabled) {
-      background-color: #1d4ed8;
+      background-color: #047857;
       transform: translateY(-2px);
-      box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
+      box-shadow: 0 6px 12px rgba(5, 150, 105, 0.3);
     }
 
     .theme-button:hover {
@@ -963,14 +1149,19 @@ if (typeof document !== 'undefined') {
       transform: translateX(4px);
     }
 
+    .data-button:hover {
+      background-color: var(--hover-bg, #f1f5f9);
+      transform: translateY(-2px);
+    }
+
     .cancel-button:hover {
       background-color: var(--hover-bg, #f8fafc);
     }
 
     .confirm-button:hover:not(:disabled) {
-      background-color: #1d4ed8;
+      background-color: #047857;
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
     }
 
     .modal-close:hover {
@@ -982,8 +1173,8 @@ if (typeof document !== 'undefined') {
     }
 
     .input:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      border-color: #059669;
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
     }
 
     .system-item:hover {
@@ -996,14 +1187,36 @@ if (typeof document !== 'undefined') {
     }
 
     .switch:focus + .switch-slider {
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.3);
     }
 
     @media (max-width: 768px) {
-      .container { padding: 16px; }
-      .header { flex-direction: column; align-items: stretch; }
-      .theme-buttons { flex-direction: column; }
-      .password-button { width: 100%; justify-content: center; }
+      .container {
+        padding: 16px;
+      }
+      
+      .header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .theme-buttons {
+        flex-direction: column;
+      }
+      
+      .button-group {
+        flex-direction: column;
+      }
+      
+      .password-button {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .data-button {
+        width: 100%;
+        justify-content: center;
+      }
     }
   `;
   document.head.appendChild(styleSheet);

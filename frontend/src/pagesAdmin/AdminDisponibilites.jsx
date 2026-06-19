@@ -194,7 +194,7 @@ export default function AdminDisponibilites() {
           <h1 style={{
             ...styles.pageTitle,
             color: 'var(--text-primary, #1e293b)',
-          }}>⏰ Gestion des disponibilités</h1>
+          }}>Gestion des disponibilités</h1>
           <p style={{
             ...styles.pageSubtitle,
             color: 'var(--text-secondary, #64748b)',
@@ -761,7 +761,7 @@ export default function AdminDisponibilites() {
                     Chargement...
                   </>
                 ) : (
-                  '💾 Enregistrer'
+                  'Enregistrer'
                 )}
               </button>
             </div>

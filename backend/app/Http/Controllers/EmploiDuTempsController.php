@@ -74,6 +74,16 @@ class EmploiDuTempsController extends Controller
         }
     }
 
+    public function show($id)
+    {
+        try {
+            return EmploiDuTemps::with(['prof', 'salle'])->findOrFail($id);
+        } catch (\Exception $e) {
+            Log::error('Erreur show EDT: ' . $e->getMessage());
+            return response()->json(['error' => 'Cours non trouvé'], 404);
+        }
+    }
+
     public function update(Request $request, $id)
     {
         try {
@@ -86,7 +96,7 @@ class EmploiDuTempsController extends Controller
                 'parcours'           => 'sometimes|string|max:100',
                 'jour'               => 'sometimes|in:Lundi,Mardi,Mercredi,Jeudi,Vendredi,Samedi',
                 'heure_debut'        => 'sometimes|date_format:H:i',
-                'heure_fin'          => 'sometimes|date_format:H:i',
+                'heure_fin'          => 'sometimes|date_format:H:i|after:heure_debut',
                 'date_debut_semaine' => 'nullable|date',
             ]);
             $edt->update($data);
@@ -101,7 +111,7 @@ class EmploiDuTempsController extends Controller
     {
         try {
             EmploiDuTemps::findOrFail($id)->delete();
-            return response()->json(['message' => 'Cours supprimé.']);
+            return response()->json(['message' => 'Cours supprimé avec succès.']);
         } catch (\Exception $e) {
             Log::error('Erreur destroy EDT: ' . $e->getMessage());
             return response()->json(['error' => 'Erreur lors de la suppression'], 500);
@@ -109,21 +119,13 @@ class EmploiDuTempsController extends Controller
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ NOUVELLES MÉTHODES POUR LES PROFESSEURS
+    // ✅ MÉTHODES POUR LES PROFESSEURS
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * PROFESSEUR: Récupérer l'emploi du temps du professeur connecté pour la semaine actuelle
-     */
     public function mySchedule(Request $request)
     {
         try {
             $weekStart = Carbon::now()->startOfWeek()->format('Y-m-d');
-            
-            Log::info('Chargement EDT professeur', [
-                'user_id' => $request->user()->id,
-                'week_start' => $weekStart
-            ]);
             
             $courses = EmploiDuTemps::with(['prof', 'salle'])
                 ->where('user_id', $request->user()->id)
@@ -131,8 +133,6 @@ class EmploiDuTempsController extends Controller
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
                 ->orderBy('heure_debut')
                 ->get();
-            
-            Log::info('Cours trouvés', ['count' => $courses->count()]);
             
             return response()->json($courses);
         } catch (\Exception $e) {
@@ -144,19 +144,10 @@ class EmploiDuTempsController extends Controller
         }
     }
 
-    /**
-     * PROFESSEUR: Récupérer l'emploi du temps du professeur pour une semaine spécifique
-     */
     public function myScheduleByWeek(Request $request, $date)
     {
         try {
             $weekStart = Carbon::parse($date)->startOfWeek()->format('Y-m-d');
-            
-            Log::info('Chargement EDT professeur par semaine', [
-                'user_id' => $request->user()->id,
-                'week_start' => $weekStart,
-                'date_reçue' => $date
-            ]);
             
             $courses = EmploiDuTemps::with(['prof', 'salle'])
                 ->where('user_id', $request->user()->id)
@@ -164,8 +155,6 @@ class EmploiDuTempsController extends Controller
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
                 ->orderBy('heure_debut')
                 ->get();
-            
-            Log::info('Cours trouvés', ['count' => $courses->count()]);
             
             return response()->json($courses);
         } catch (\Exception $e) {
@@ -177,9 +166,10 @@ class EmploiDuTempsController extends Controller
         }
     }
 
-    /**
-     * ADMIN: Récupérer les cours d'une semaine spécifique
-     */
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ MÉTHODES ADMIN AVANCÉES
+    // ═══════════════════════════════════════════════════════════════
+
     public function getByWeek($date)
     {
         try {
@@ -196,9 +186,6 @@ class EmploiDuTempsController extends Controller
         }
     }
 
-    /**
-     * ADMIN: Récupérer les cours d'un professeur pour une semaine
-     */
     public function getByProfAndWeek($profId, $weekStart)
     {
         try {
@@ -216,9 +203,6 @@ class EmploiDuTempsController extends Controller
         }
     }
 
-    /**
-     * ADMIN: Filtrer les cours par critères
-     */
     public function filterByCriteria(Request $request)
     {
         try {
@@ -250,67 +234,223 @@ class EmploiDuTempsController extends Controller
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ MÉTHODES D'ENVOI D'EMAILS - VERSION CORRIGÉE
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Envoyer email aux étudiants avec l'emploi du temps
+     */
     public function envoyerEmail(Request $request)
     {
         try {
-            $request->validate([
-                'niveau'   => 'required|in:L1,L2,L3,M1,M2',
+            $validated = $request->validate([
+                'niveau' => 'required|in:L1,L2,L3,M1,M2',
                 'parcours' => 'required|string',
+                'week_start' => 'nullable|date',
+                'recipients' => 'nullable|array',
+                'recipients.*' => 'integer|exists:etudiants,id',
+                'subject' => 'nullable|string|max:255',
+                'html_content' => 'nullable|string',
             ]);
 
-            Log::info('Envoi email EDT', [
-                'niveau' => $request->niveau,
-                'parcours' => $request->parcours
+            $weekStart = $validated['week_start'] 
+                ? Carbon::parse($validated['week_start'])->startOfWeek()->format('Y-m-d')
+                : Carbon::now()->startOfWeek()->format('Y-m-d');
+
+            Log::info('📧 Envoi email EDT', [
+                'niveau' => $validated['niveau'],
+                'parcours' => $validated['parcours'],
+                'week_start' => $weekStart,
+                'has_recipients' => isset($validated['recipients']),
+                'recipients_count' => isset($validated['recipients']) ? count($validated['recipients']) : 0,
+                'has_html_content' => isset($validated['html_content'])
             ]);
 
-            $etudiants = Etudiant::where('niveau',   $request->niveau)
-                ->where('parcours', $request->parcours)
-                ->get();
+            // Récupérer les étudiants
+            if (isset($validated['recipients']) && !empty($validated['recipients'])) {
+                $etudiants = Etudiant::whereIn('id', $validated['recipients'])->get();
+            } else {
+                $etudiants = Etudiant::where('niveau', $validated['niveau'])
+                    ->where('parcours', $validated['parcours'])
+                    ->get();
+            }
 
             if ($etudiants->isEmpty()) {
-                return response()->json(['message' => 'Aucun étudiant trouvé.'], 404);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucun étudiant trouvé pour ces critères.'
+                ], 404);
             }
 
-            $weekStart = Carbon::now()->startOfWeek()->format('Y-m-d');
-            
-            $emplois = EmploiDuTemps::with(['prof', 'salle'])
-                ->where('niveau',   $request->niveau)
-                ->where('parcours', $request->parcours)
-                ->where('date_debut_semaine', $weekStart)
-                ->get();
+            $subject = $validated['subject'] ?? "Emploi du temps ENI - Semaine du " . Carbon::parse($weekStart)->format('d/m/Y');
+            $htmlContent = $validated['html_content'] ?? null;
+
+            $sentCount = 0;
+            $errors = [];
 
             foreach ($etudiants as $etudiant) {
-                Mail::to($etudiant->email)->send(new EmploiDuTempsMail($etudiant, $emplois));
+                try {
+                    // Vérifier que l'étudiant a un email
+                    if (empty($etudiant->email)) {
+                        Log::warning("⚠️ Étudiant sans email: {$etudiant->nom} (ID: {$etudiant->id})");
+                        continue;
+                    }
+
+                    if ($htmlContent) {
+                        // ✅ Envoyer avec le HTML personnalisé du frontend
+                        // Utilisation de Mail::send avec un callback
+                        Mail::send([], [], function ($message) use ($etudiant, $subject, $htmlContent) {
+                            $message->to($etudiant->email, $etudiant->nom)
+                                    ->subject($subject)
+                                    ->html($htmlContent);
+                        });
+                    } else {
+                        // Envoyer avec la vue Blade via Mailable
+                        $emplois = $this->getEmploisForStudent(
+                            $validated['niveau'], 
+                            $validated['parcours'], 
+                            $weekStart
+                        );
+                        
+                        Mail::to($etudiant->email, $etudiant->nom)
+                            ->send(new EmploiDuTempsMail(
+                                $etudiant, 
+                                $emplois, 
+                                false,
+                                $subject,
+                                null
+                            ));
+                    }
+                    
+                    $sentCount++;
+                    Log::info("✅ Email envoyé à: {$etudiant->email} ({$etudiant->nom})");
+                } catch (\Exception $e) {
+                    Log::error("❌ Erreur envoi email à {$etudiant->email}: " . $e->getMessage());
+                    $errors[] = [
+                        'email' => $etudiant->email,
+                        'error' => $e->getMessage()
+                    ];
+                }
             }
 
-            return response()->json(['message' => "Email envoyé à {$etudiants->count()} étudiant(s)."]);
+            return response()->json([
+                'success' => true,
+                'message' => "Email envoyé à {$sentCount} étudiant(s).",
+                'sent' => $sentCount,
+                'total' => $etudiants->count(),
+                'errors' => $errors
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('❌ Erreur validation envoyerEmail: ' . json_encode($e->errors()));
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
-            Log::error('Erreur envoyerEmail EDT: ' . $e->getMessage());
-            return response()->json(['error' => 'Erreur lors de l\'envoi des emails'], 500);
+            Log::error('❌ Erreur envoyerEmail EDT: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi des emails: ' . $e->getMessage()
+            ], 500);
         }
     }
 
-    public function envoyerEmailProfs()
+    /**
+     * Récupérer les emplois du temps pour un étudiant
+     */
+    private function getEmploisForStudent($niveau, $parcours, $weekStart)
+    {
+        return EmploiDuTemps::with(['prof', 'salle'])
+            ->where('niveau', $niveau)
+            ->where('parcours', $parcours)
+            ->where('date_debut_semaine', $weekStart)
+            ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
+            ->orderBy('heure_debut')
+            ->get();
+    }
+
+    public function envoyerEmailProfs(Request $request)
     {
         try {
-            $weekStart = Carbon::now()->startOfWeek()->format('Y-m-d');
-            
+            $weekStart = $request->input('week_start')
+                ? Carbon::parse($request->week_start)->startOfWeek()->format('Y-m-d')
+                : Carbon::now()->startOfWeek()->format('Y-m-d');
+
+            Log::info('📧 Envoi email EDT aux professeurs', ['week_start' => $weekStart]);
+
             $emplois = EmploiDuTemps::with(['prof', 'salle'])
                 ->where('date_debut_semaine', $weekStart)
                 ->get();
-                
-            $profIds = $emplois->pluck('user_id')->unique();
-            $profs   = \App\Models\User::whereIn('id', $profIds)->where('role', 'prof')->get();
 
-            foreach ($profs as $prof) {
-                $emploisProf = $emplois->where('user_id', $prof->id)->values();
-                Mail::to($prof->email)->send(new EmploiDuTempsMail($prof, $emploisProf, true));
+            if ($emplois->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucun cours trouvé pour cette semaine.'
+                ], 404);
             }
 
-            return response()->json(['message' => "Email envoyé à {$profs->count()} professeur(s)."]);
+            $profIds = $emplois->pluck('user_id')->unique();
+            $profs = \App\Models\User::whereIn('id', $profIds)
+                ->where('role', 'prof')
+                ->get();
+
+            if ($profs->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucun professeur trouvé.'
+                ], 404);
+            }
+
+            $sentCount = 0;
+            $errors = [];
+
+            foreach ($profs as $prof) {
+                try {
+                    $emploisProf = $emplois->where('user_id', $prof->id)->values();
+                    
+                    if ($emploisProf->isEmpty()) {
+                        continue;
+                    }
+
+                    $subject = $request->input('subject') ?? "Votre emploi du temps ENI - Semaine du " . Carbon::parse($weekStart)->format('d/m/Y');
+
+                    Mail::to($prof->email, $prof->name)->send(new EmploiDuTempsMail(
+                        $prof,
+                        $emploisProf,
+                        true,
+                        $subject,
+                        null
+                    ));
+
+                    $sentCount++;
+                    Log::info("✅ Email envoyé au professeur: {$prof->email} ({$prof->name})");
+                } catch (\Exception $e) {
+                    Log::error("❌ Erreur envoi email au professeur {$prof->email}: " . $e->getMessage());
+                    $errors[] = [
+                        'email' => $prof->email,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Email envoyé à {$sentCount} professeur(s).",
+                'sent' => $sentCount,
+                'total' => $profs->count(),
+                'errors' => $errors
+            ]);
+
         } catch (\Exception $e) {
-            Log::error('Erreur envoyerEmailProfs EDT: ' . $e->getMessage());
-            return response()->json(['error' => 'Erreur lors de l\'envoi des emails'], 500);
+            Log::error('❌ Erreur envoyerEmailProfs EDT: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi des emails: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

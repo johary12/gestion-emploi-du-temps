@@ -21,6 +21,9 @@ import AdminAide from './pagesAdmin/AdminAide';
 import ProfDashboard from './pagesProf/ProfDashboard';
 import ProfDisponibilites from './pagesProf/ProfDisponibilites';
 import ProfEmploiDuTemps from './pagesProf/ProfEmploiDuTemps';
+// ✅ Nouveaux imports pour les pages Professeur
+import ProfParametre from './pagesProf/ProfParametre';
+import ProfAide from './pagesProf/ProfAide';
 
 // Pages publiques
 import Login from './pages/Login';
@@ -110,6 +113,18 @@ function AppContent() {
       <Route path="/prof/emploi" element={
         <ProtectedRoute allowedRoles={['prof']}>
           <NavbarProf><ProfEmploiDuTemps /></NavbarProf>
+        </ProtectedRoute>
+      } />
+      
+      {/* ✅ NOUVELLES ROUTES PROFESSEUR - Paramètres et Aide */}
+      <Route path="/prof/parametres" element={
+        <ProtectedRoute allowedRoles={['prof']}>
+          <NavbarProf><ProfParametre /></NavbarProf>
+        </ProtectedRoute>
+      } />
+      <Route path="/prof/aide" element={
+        <ProtectedRoute allowedRoles={['prof']}>
+          <NavbarProf><ProfAide /></NavbarProf>
         </ProtectedRoute>
       } />
 

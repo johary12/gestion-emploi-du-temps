@@ -93,7 +93,7 @@ export const edtService = {
     api.get(`/emploi-du-temps/prof/${profId}/semaine/${weekStart}`),
   filter: (params) => api.get('/emploi-du-temps/filter', { params }),
   
-  // Professor endpoints - THESE ARE WHAT PROFESSORS SHOULD USE
+  // Professor endpoints
   getMySchedule: () => api.get('/prof/mon-emploi-du-temps'),
   getMyScheduleByWeek: (date) => 
     api.get(`/prof/mon-emploi-du-temps/semaine/${date}`),
@@ -114,19 +114,79 @@ export const disponibiliteService = {
 
 // ─── Email Service ─────────────────────────────────────────────────────────────
 export const emailService = {
+  /**
+   * Envoyer l'emploi du temps aux étudiants
+   */
   sendEmploiDuTemps: async (data) => {
-    const payload = {
-      niveau: data.niveau || 'L1',
-      parcours: data.parcours || 'Génie Logiciel'
-    };
-    
-    const response = await api.post('/emploi-du-temps/envoyer-etudiants', payload);
-    return { success: true, message: response.data.message || 'Emails envoyés avec succès' };
+    try {
+      const payload = {
+        niveau: data.niveau || 'L1',
+        parcours: data.parcours || 'GL',
+      };
+      
+      if (data.weekStart) {
+        payload.week_start = data.weekStart;
+      }
+      
+      if (data.recipients && data.recipients.length > 0) {
+        payload.recipients = data.recipients;
+      }
+      
+      if (data.subject) {
+        payload.subject = data.subject;
+      }
+      
+      // ✅ Convertir htmlContent en html_content
+      if (data.htmlContent) {
+        payload.html_content = data.htmlContent;
+      }
+
+      console.log('📧 Envoi d\'emails - Payload final:', payload);
+
+      const response = await api.post('/emploi-du-temps/envoyer-etudiants', payload);
+      
+      return { 
+        success: true, 
+        message: response.data.message || 'Emails envoyés avec succès',
+        data: response.data
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'envoi des emails:', error);
+      
+      if (error.response) {
+        console.error('📝 Réponse du serveur:', error.response.data);
+        console.error('🔢 Status:', error.response.status);
+      }
+      
+      throw error;
+    }
   },
   
   sendEmploiDuTempsToProfs: async (data) => {
-    const response = await api.post('/emploi-du-temps/envoyer-profs', data);
-    return { success: true, message: response.data.message || 'Emails envoyés avec succès' };
+    try {
+      const payload = {
+        week_start: data.weekStart || null,
+      };
+      
+      if (data.professeur_ids && data.professeur_ids.length > 0) {
+        payload.professeur_ids = data.professeur_ids;
+      }
+      
+      if (data.subject) {
+        payload.subject = data.subject;
+      }
+      
+      const response = await api.post('/emploi-du-temps/envoyer-profs', payload);
+      
+      return { 
+        success: true, 
+        message: response.data.message || 'Emails envoyés avec succès' 
+      };
+    } catch (error) {
+      console.error('❌ Erreur envoi email profs:', error);
+      
+      throw error;
+    }
   },
 };
 
