@@ -7,6 +7,7 @@ use App\Http\Controllers\SalleController;
 use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\DisponibiliteController;
 use App\Http\Controllers\EmploiDuTempsController;
+use App\Http\Controllers\MatiereController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Routes publiques ──────────────────────────────────────────────────────────
@@ -76,5 +77,15 @@ Route::middleware('auth:sanctum')->group(function () {
         
         Route::apiResource('disponibilites', DisponibiliteController::class)
             ->except(['index', 'show']);
+
+            // ── Gestion des matières ──
+Route::prefix('matieres')->group(function () {
+    Route::get('/', [MatiereController::class, 'index']);
+    Route::get('/list', [MatiereController::class, 'list']);
+    Route::post('/', [MatiereController::class, 'store']);
+    Route::get('/{id}', [MatiereController::class, 'show']);
+    Route::put('/{id}', [MatiereController::class, 'update']);
+    Route::delete('/{id}', [MatiereController::class, 'destroy']);
+});
     });
 });

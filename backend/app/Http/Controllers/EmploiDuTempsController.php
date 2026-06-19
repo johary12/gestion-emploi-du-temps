@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmploiDuTemps;
 use App\Models\Etudiant;
+use App\Models\Matiere;
 use App\Mail\EmploiDuTempsMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -15,7 +16,7 @@ class EmploiDuTempsController extends Controller
     public function public(Request $request)
     {
         try {
-            $query = EmploiDuTemps::with(['prof', 'salle']);
+            $query = EmploiDuTemps::with(['prof', 'salle', 'matiereRelation']);
             if ($request->filled('niveau'))   $query->where('niveau',   $request->niveau);
             if ($request->filled('parcours')) $query->where('parcours', $request->parcours);
             if ($request->filled('date_debut_semaine')) {
@@ -25,6 +26,9 @@ class EmploiDuTempsController extends Controller
             return $query->get()->map(fn($e) => [
                 'id'          => $e->id,
                 'matiere'     => $e->matiere,
+                'matiere_id'  => $e->matiere_id,
+                'matiere_nom' => $e->matiere_nom,
+                'matiere_couleur' => $e->matiere_couleur,
                 'niveau'      => $e->niveau,
                 'parcours'    => $e->parcours,
                 'jour'        => $e->jour,
@@ -45,7 +49,7 @@ class EmploiDuTempsController extends Controller
     public function index()
     {
         try {
-            return EmploiDuTemps::with(['prof', 'salle'])->get();
+            return EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])->get();
         } catch (\Exception $e) {
             Log::error('Erreur index EDT: ' . $e->getMessage());
             return response()->json(['error' => 'Erreur lors du chargement'], 500);
@@ -58,7 +62,8 @@ class EmploiDuTempsController extends Controller
             $data = $request->validate([
                 'user_id'            => 'required|exists:users,id',
                 'salle_id'           => 'required|exists:salles,id',
-                'matiere'            => 'required|string|max:200',
+                'matiere_id'         => 'nullable|exists:matieres,id',
+                'matiere'            => 'required_without:matiere_id|string|max:200',
                 'niveau'             => 'required|in:L1,L2,L3,M1,M2',
                 'parcours'           => 'required|string|max:100',
                 'jour'               => 'required|in:Lundi,Mardi,Mercredi,Jeudi,Vendredi,Samedi',
@@ -66,18 +71,33 @@ class EmploiDuTempsController extends Controller
                 'heure_fin'          => 'required|date_format:H:i|after:heure_debut',
                 'date_debut_semaine' => 'nullable|date',
             ]);
+
+            // Si matiere_id est fourni, récupérer le nom de la matière
+            if (isset($data['matiere_id']) && $data['matiere_id']) {
+                $matiere = Matiere::find($data['matiere_id']);
+                if ($matiere) {
+                    $data['matiere'] = $matiere->nom;
+                }
+            }
+
             $edt = EmploiDuTemps::create($data);
-            return response()->json($edt->load(['prof', 'salle']), 201);
+            return response()->json($edt->load(['prof', 'salle', 'matiereRelation']), 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Erreur store EDT: ' . $e->getMessage());
-            return response()->json(['error' => 'Erreur lors de la création'], 500);
+            return response()->json(['error' => 'Erreur lors de la création: ' . $e->getMessage()], 500);
         }
     }
 
     public function show($id)
     {
         try {
-            return EmploiDuTemps::with(['prof', 'salle'])->findOrFail($id);
+            return EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])->findOrFail($id);
         } catch (\Exception $e) {
             Log::error('Erreur show EDT: ' . $e->getMessage());
             return response()->json(['error' => 'Cours non trouvé'], 404);
@@ -91,7 +111,8 @@ class EmploiDuTempsController extends Controller
             $data = $request->validate([
                 'user_id'            => 'sometimes|exists:users,id',
                 'salle_id'           => 'sometimes|exists:salles,id',
-                'matiere'            => 'sometimes|string|max:200',
+                'matiere_id'         => 'nullable|exists:matieres,id',
+                'matiere'            => 'required_without:matiere_id|string|max:200',
                 'niveau'             => 'sometimes|in:L1,L2,L3,M1,M2',
                 'parcours'           => 'sometimes|string|max:100',
                 'jour'               => 'sometimes|in:Lundi,Mardi,Mercredi,Jeudi,Vendredi,Samedi',
@@ -99,11 +120,26 @@ class EmploiDuTempsController extends Controller
                 'heure_fin'          => 'sometimes|date_format:H:i|after:heure_debut',
                 'date_debut_semaine' => 'nullable|date',
             ]);
+
+            // Si matiere_id est fourni, mettre à jour le nom de la matière
+            if (isset($data['matiere_id']) && $data['matiere_id']) {
+                $matiere = Matiere::find($data['matiere_id']);
+                if ($matiere) {
+                    $data['matiere'] = $matiere->nom;
+                }
+            }
+
             $edt->update($data);
-            return response()->json($edt->load(['prof', 'salle']));
+            return response()->json($edt->load(['prof', 'salle', 'matiereRelation']));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Erreur update EDT: ' . $e->getMessage());
-            return response()->json(['error' => 'Erreur lors de la modification'], 500);
+            return response()->json(['error' => 'Erreur lors de la modification: ' . $e->getMessage()], 500);
         }
     }
 
@@ -127,7 +163,7 @@ class EmploiDuTempsController extends Controller
         try {
             $weekStart = Carbon::now()->startOfWeek()->format('Y-m-d');
             
-            $courses = EmploiDuTemps::with(['prof', 'salle'])
+            $courses = EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
                 ->where('user_id', $request->user()->id)
                 ->where('date_debut_semaine', $weekStart)
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
@@ -149,7 +185,7 @@ class EmploiDuTempsController extends Controller
         try {
             $weekStart = Carbon::parse($date)->startOfWeek()->format('Y-m-d');
             
-            $courses = EmploiDuTemps::with(['prof', 'salle'])
+            $courses = EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
                 ->where('user_id', $request->user()->id)
                 ->where('date_debut_semaine', $weekStart)
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
@@ -175,7 +211,7 @@ class EmploiDuTempsController extends Controller
         try {
             $weekStart = Carbon::parse($date)->startOfWeek()->format('Y-m-d');
             
-            return EmploiDuTemps::with(['prof', 'salle'])
+            return EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
                 ->where('date_debut_semaine', $weekStart)
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
                 ->orderBy('heure_debut')
@@ -191,7 +227,7 @@ class EmploiDuTempsController extends Controller
         try {
             $weekStart = Carbon::parse($weekStart)->startOfWeek()->format('Y-m-d');
             
-            return EmploiDuTemps::with(['prof', 'salle'])
+            return EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
                 ->where('user_id', $profId)
                 ->where('date_debut_semaine', $weekStart)
                 ->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
@@ -206,7 +242,7 @@ class EmploiDuTempsController extends Controller
     public function filterByCriteria(Request $request)
     {
         try {
-            $query = EmploiDuTemps::with(['prof', 'salle']);
+            $query = EmploiDuTemps::with(['prof', 'salle', 'matiereRelation']);
 
             if ($request->filled('niveau')) {
                 $query->where('niveau', $request->niveau);
@@ -225,6 +261,10 @@ class EmploiDuTempsController extends Controller
                 $query->where('user_id', $request->prof_id);
             }
 
+            if ($request->filled('matiere_id')) {
+                $query->where('matiere_id', $request->matiere_id);
+            }
+
             return $query->orderByRaw("FIELD(jour, 'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')")
                 ->orderBy('heure_debut')
                 ->get();
@@ -235,7 +275,7 @@ class EmploiDuTempsController extends Controller
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ MÉTHODES D'ENVOI D'EMAILS - VERSION CORRIGÉE
+    // ✅ MÉTHODES D'ENVOI D'EMAILS
     // ═══════════════════════════════════════════════════════════════
 
     /**
@@ -291,15 +331,13 @@ class EmploiDuTempsController extends Controller
 
             foreach ($etudiants as $etudiant) {
                 try {
-                    // Vérifier que l'étudiant a un email
                     if (empty($etudiant->email)) {
                         Log::warning("⚠️ Étudiant sans email: {$etudiant->nom} (ID: {$etudiant->id})");
                         continue;
                     }
 
                     if ($htmlContent) {
-                        // ✅ Envoyer avec le HTML personnalisé du frontend
-                        // Utilisation de Mail::send avec un callback
+                        // Envoyer avec le HTML personnalisé du frontend
                         Mail::send([], [], function ($message) use ($etudiant, $subject, $htmlContent) {
                             $message->to($etudiant->email, $etudiant->nom)
                                     ->subject($subject)
@@ -364,7 +402,7 @@ class EmploiDuTempsController extends Controller
      */
     private function getEmploisForStudent($niveau, $parcours, $weekStart)
     {
-        return EmploiDuTemps::with(['prof', 'salle'])
+        return EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
             ->where('niveau', $niveau)
             ->where('parcours', $parcours)
             ->where('date_debut_semaine', $weekStart)
@@ -382,7 +420,7 @@ class EmploiDuTempsController extends Controller
 
             Log::info('📧 Envoi email EDT aux professeurs', ['week_start' => $weekStart]);
 
-            $emplois = EmploiDuTemps::with(['prof', 'salle'])
+            $emplois = EmploiDuTemps::with(['prof', 'salle', 'matiereRelation'])
                 ->where('date_debut_semaine', $weekStart)
                 ->get();
 

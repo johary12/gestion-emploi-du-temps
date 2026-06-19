@@ -1,14 +1,15 @@
-// src/pagesAdmin/AdminEmploiDuTemps.jsx - Version avec export PDF fonctionnel
+// src/pagesAdmin/AdminEmploiDuTemps.jsx - Version avec variables CSS comme AdminDashboard
 
 import { useState, useEffect, useRef } from 'react';
-import { edtService, profService, salleService, etudiantService, emailService } from '../services/api';
+import { edtService, profService, salleService, etudiantService, emailService, matiereService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { 
   Plus, Calendar, Clock, User, MapPin, ChevronLeft, ChevronRight, 
   Search, Filter, X, Download, Mail, FileText, CheckCircle, AlertCircle,
-  Edit2, Trash2, AlertTriangle, Send, Printer, RefreshCw, Users,
+  Edit2, Trash2, AlertTriangle, Send, RefreshCw, Users,
   BookOpen, DoorOpen, GraduationCap, Clock as ClockIcon, Save,
-  Loader2
+  Loader2, Palette, Code, BookMarked, Sparkles, LayoutGrid,
+  Layers, Trophy, Award, Star, Zap, BarChart3, TrendingUp, TrendingDown
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -17,16 +18,14 @@ import html2canvas from 'html2canvas';
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const NIVEAUX = ['L1', 'L2', 'L3', 'M1', 'M2'];
 
-// Parcours complets ENI avec icônes
 const PARCOURS = [
-  { id: 'GL', label: 'Génie Logiciel', icon: '💻' },
-  { id: 'ASR', label: 'Admin Système et Réseaux', icon: '🌐' },
-  { id: 'IG', label: 'Informatique Générale', icon: '🖥️' },
-  { id: 'IASDM', label: 'IA et Science des Données', icon: '🤖' },
-  { id: 'SECURITE', label: 'Cybersécurité', icon: '🛡️' }
+  { id: 'GL', label: 'Génie Logiciel', icon: '💻', color: '#3B82F6' },
+  { id: 'ASR', label: 'Admin Système et Réseaux', icon: '🌐', color: '#10B981' },
+  { id: 'IG', label: 'Informatique Générale', icon: '🖥️', color: '#8B5CF6' },
+  { id: 'IASDM', label: 'IA et Science des Données', icon: '🤖', color: '#F59E0B' },
+  { id: 'SECURITE', label: 'Cybersécurité', icon: '🛡️', color: '#EF4444' }
 ];
 
-// Parcours disponibles par niveau
 const PARCOURS_PAR_NIVEAU = {
   'L1': ['GL', 'ASR', 'IG'],
   'L2': ['GL', 'ASR', 'IG'],
@@ -34,6 +33,12 @@ const PARCOURS_PAR_NIVEAU = {
   'M1': ['GL', 'ASR', 'IG', 'IASDM', 'SECURITE'],
   'M2': ['GL', 'ASR', 'IG', 'IASDM', 'SECURITE']
 };
+
+const COLORS = [
+  '#2563EB', '#7C3AED', '#DC2626', '#059669', '#D97706',
+  '#9333EA', '#0891B2', '#4F46E5', '#0D9488', '#F59E0B',
+  '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'
+];
 
 // ===================== UTILITAIRES =====================
 const toLocalDateString = (date) => {
@@ -86,7 +91,6 @@ const canModifyCourse = (date) => {
   return dateObj >= today;
 };
 
-// Formatter les dates pour l'affichage
 const formatDateFr = (date) => {
   return new Date(date).toLocaleDateString('fr-FR', { 
     day: 'numeric', 
@@ -99,7 +103,6 @@ export default function AdminEmploitudtemps() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  // Référence pour le contenu à exporter
   const exportRef = useRef(null);
 
   // États
@@ -108,6 +111,7 @@ export default function AdminEmploitudtemps() {
   const [profs, setProfs] = useState([]);
   const [salles, setSalles] = useState([]);
   const [etudiants, setEtudiants] = useState([]);
+  const [matieres, setMatieres] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -120,7 +124,8 @@ export default function AdminEmploitudtemps() {
     niveau: '',
     parcours: '',
     prof: '',
-    salle: ''
+    salle: '',
+    matiere_id: ''
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -139,7 +144,21 @@ export default function AdminEmploitudtemps() {
     courseData: null, 
     courseName: '' 
   });
+  
+  // États pour la gestion des matières
+  const [showMatiereModal, setShowMatiereModal] = useState(false);
+  const [editMatiereId, setEditMatiereId] = useState(null);
+  const [matiereSearch, setMatiereSearch] = useState('');
+  const [matiereForm, setMatiereForm] = useState({
+    nom: '',
+    code: '',
+    description: '',
+    couleur: '#2563EB',
+    is_active: true
+  });
+
   const [form, setForm] = useState({
+    matiere_id: '',
     matiere: '',
     niveau: 'L1',
     parcours: 'GL',
@@ -208,6 +227,9 @@ export default function AdminEmploitudtemps() {
     if (filters.salle) {
       filtered = filtered.filter(c => c.salle_id === parseInt(filters.salle));
     }
+    if (filters.matiere_id) {
+      filtered = filtered.filter(c => c.matiere_id === parseInt(filters.matiere_id));
+    }
     
     filtered = filtered.map(course => {
       const courseDate = getCourseDate(currentWeekStart, course.jour);
@@ -229,7 +251,8 @@ export default function AdminEmploitudtemps() {
         loadCourses(),
         loadProfs(),
         loadSalles(),
-        loadEtudiants()
+        loadEtudiants(),
+        loadMatieres()
       ]);
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -275,6 +298,15 @@ export default function AdminEmploitudtemps() {
     }
   };
 
+  const loadMatieres = async () => {
+    try {
+      const res = await matiereService.getList();
+      setMatieres(res.data || []);
+    } catch (error) {
+      console.error('Erreur chargement matières:', error);
+    }
+  };
+
   const showToastNotification = (message, type = 'success') => {
     setNotification({ show: true, type, message });
     setTimeout(() => {
@@ -317,8 +349,18 @@ export default function AdminEmploitudtemps() {
     return salle?.nom || '—';
   };
 
+  const getMatiereNom = (id) => {
+    const matiere = matieres.find(m => m.id === id);
+    return matiere?.nom || '';
+  };
+
+  const getMatiereCouleur = (id) => {
+    const matiere = matieres.find(m => m.id === id);
+    return matiere?.couleur || '#2563EB';
+  };
+
   const resetFilters = () => {
-    setFilters({ niveau: '', parcours: '', prof: '', salle: '' });
+    setFilters({ niveau: '', parcours: '', prof: '', salle: '', matiere_id: '' });
   };
 
   const openConfirmationModal = (action, id = null, courseData = null, courseName = '') => {
@@ -337,7 +379,8 @@ export default function AdminEmploitudtemps() {
     
     setEditId(course.id);
     setForm({
-      matiere: course.matiere,
+      matiere_id: course.matiere_id || '',
+      matiere: course.matiere || '',
       niveau: course.niveau,
       parcours: course.parcours,
       jour: course.jour,
@@ -374,8 +417,18 @@ export default function AdminEmploitudtemps() {
   const handleSave = async () => {
     try {
       const weekStartStr = toLocalDateString(currentWeekStart);
+      
+      let matiereName = form.matiere;
+      if (form.matiere_id) {
+        const selectedMatiere = matieres.find(m => m.id === parseInt(form.matiere_id));
+        if (selectedMatiere) {
+          matiereName = selectedMatiere.nom;
+        }
+      }
+
       const courseData = {
-        matiere: form.matiere,
+        matiere_id: form.matiere_id || null,
+        matiere: matiereName,
         niveau: form.niveau,
         parcours: form.parcours,
         jour: form.jour,
@@ -387,7 +440,7 @@ export default function AdminEmploitudtemps() {
       };
       
       if (editId) {
-        openConfirmationModal('update', editId, courseData, form.matiere);
+        openConfirmationModal('update', editId, courseData, matiereName);
       } else {
         await edtService.create(courseData);
         await loadCourses();
@@ -419,13 +472,14 @@ export default function AdminEmploitudtemps() {
   const resetForm = () => {
     setEditId(null);
     setForm({
-      matiere: '', 
-      niveau: 'L1', 
-      parcours: 'GL', 
+      matiere_id: '',
+      matiere: '',
+      niveau: 'L1',
+      parcours: 'GL',
       jour: 'Lundi',
-      heure_debut: '08:00', 
-      heure_fin: '10:00', 
-      user_id: '', 
+      heure_debut: '08:00',
+      heure_fin: '10:00',
+      user_id: '',
       salle_id: '',
       date_debut_semaine: ''
     });
@@ -436,7 +490,70 @@ export default function AdminEmploitudtemps() {
     resetForm();
   };
 
-  // Gestion du changement de niveau
+  // ===================== GESTION DES MATIÈRES =====================
+  const handleMatiereSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editMatiereId) {
+        await matiereService.update(editMatiereId, matiereForm);
+        showToastNotification('Matière mise à jour avec succès');
+      } else {
+        await matiereService.create(matiereForm);
+        showToastNotification('Matière créée avec succès');
+      }
+      await loadMatieres();
+      setShowMatiereModal(false);
+      resetMatiereForm();
+    } catch (error) {
+      console.error('Erreur sauvegarde matière:', error);
+      showToastNotification(error.response?.data?.message || 'Erreur lors de la sauvegarde', 'error');
+    }
+  };
+
+  const handleDeleteMatiere = async (id) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette matière ?')) return;
+    try {
+      await matiereService.delete(id);
+      await loadMatieres();
+      showToastNotification('Matière supprimée avec succès');
+    } catch (error) {
+      console.error('Erreur suppression matière:', error);
+      showToastNotification(error.response?.data?.message || 'Erreur lors de la suppression', 'error');
+    }
+  };
+
+  const resetMatiereForm = () => {
+    setEditMatiereId(null);
+    setMatiereForm({
+      nom: '',
+      code: '',
+      description: '',
+      couleur: '#2563EB',
+      is_active: true
+    });
+  };
+
+  const openMatiereModal = (matiere = null) => {
+    if (matiere) {
+      setEditMatiereId(matiere.id);
+      setMatiereForm({
+        nom: matiere.nom,
+        code: matiere.code || '',
+        description: matiere.description || '',
+        couleur: matiere.couleur || '#2563EB',
+        is_active: matiere.is_active !== false
+      });
+    } else {
+      resetMatiereForm();
+    }
+    setShowMatiereModal(true);
+  };
+
+  const filteredMatieres = matieres.filter(m => 
+    m.nom.toLowerCase().includes(matiereSearch.toLowerCase()) ||
+    (m.code && m.code.toLowerCase().includes(matiereSearch.toLowerCase()))
+  );
+
   const handleNiveauChange = (e) => {
     const niveau = e.target.value;
     const parcoursDisponibles = PARCOURS_PAR_NIVEAU[niveau] || [];
@@ -451,7 +568,37 @@ export default function AdminEmploitudtemps() {
     });
   };
 
-  // ===================== FONCTION EXPORT PDF AMÉLIORÉE =====================
+  // ===================== STATISTIQUES =====================
+  const getNiveauStats = () => {
+    const stats = {};
+    NIVEAUX.forEach(n => {
+      stats[n] = filteredCourses.filter(c => c.niveau === n).length;
+    });
+    return stats;
+  };
+
+  const getParcoursStats = () => {
+    const stats = {};
+    PARCOURS.forEach(p => {
+      stats[p.id] = filteredCourses.filter(c => c.parcours === p.id).length;
+    });
+    return stats;
+  };
+
+  const getJourStats = () => {
+    const stats = {};
+    JOURS.forEach(j => {
+      stats[j] = filteredCourses.filter(c => c.jour === j).length;
+    });
+    return stats;
+  };
+
+  const niveauStats = getNiveauStats();
+  const parcoursStats = getParcoursStats();
+  const jourStats = getJourStats();
+  const totalCourses = filteredCourses.length;
+
+  // ===================== FONCTION EXPORT PDF =====================
   const handleExportPDF = async () => {
     if (filteredCourses.length === 0) {
       showToastNotification('Aucun cours à exporter', 'error');
@@ -460,7 +607,6 @@ export default function AdminEmploitudtemps() {
 
     setExporting(true);
     try {
-      // Créer un élément temporaire pour le rendu PDF
       const pdfContainer = document.createElement('div');
       pdfContainer.style.cssText = `
         position: fixed;
@@ -474,7 +620,6 @@ export default function AdminEmploitudtemps() {
       `;
       document.body.appendChild(pdfContainer);
 
-      // Générer le contenu HTML pour le PDF
       const weekRange = getWeekRange();
       const weekStartDate = new Date(currentWeekStart);
       const weekEndDate = new Date(weekStartDate);
@@ -586,12 +731,13 @@ export default function AdminEmploitudtemps() {
           <div class="pdf-info-item"><strong>📚 Total cours :</strong> ${filteredCourses.length}</div>
         </div>
 
-        ${(filters.niveau || filters.parcours || filters.prof || filters.salle) ? `
+        ${(filters.niveau || filters.parcours || filters.prof || filters.salle || filters.matiere_id) ? `
           <div class="pdf-filters">
             ${filters.niveau ? `<span class="pdf-filter-tag">📚 ${filters.niveau}</span>` : ''}
             ${filters.parcours ? `<span class="pdf-filter-tag">🎓 ${getParcoursLabel(filters.parcours)}</span>` : ''}
             ${filters.prof ? `<span class="pdf-filter-tag">👨‍🏫 ${getProfName(parseInt(filters.prof))}</span>` : ''}
             ${filters.salle ? `<span class="pdf-filter-tag">🚪 ${getSalleName(parseInt(filters.salle))}</span>` : ''}
+            ${filters.matiere_id ? `<span class="pdf-filter-tag">📖 ${getMatiereNom(parseInt(filters.matiere_id))}</span>` : ''}
           </div>
         ` : ''}
 
@@ -609,7 +755,7 @@ export default function AdminEmploitudtemps() {
                     <div class="pdf-empty">Aucun cours</div>
                   ` : `
                     ${dayCourses.map(course => `
-                      <div class="pdf-course">
+                      <div class="pdf-course" style="border-left-color: ${course.matiere_id ? getMatiereCouleur(course.matiere_id) : '#2563EB'}">
                         <div class="pdf-course-title">${course.matiere}</div>
                         <div class="pdf-course-time">⏰ ${course.heure_debut?.substring(0,5) || ''} - ${course.heure_fin?.substring(0,5) || ''}</div>
                         <div class="pdf-course-detail">👨‍🏫 ${getProfName(course.user_id)}  •  📍 ${getSalleName(course.salle_id)}</div>
@@ -634,7 +780,6 @@ export default function AdminEmploitudtemps() {
 
       pdfContainer.innerHTML = htmlContent;
 
-      // Utiliser html2canvas pour capturer le contenu
       const canvas = await html2canvas(pdfContainer, {
         scale: 2,
         useCORS: true,
@@ -647,7 +792,6 @@ export default function AdminEmploitudtemps() {
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       
-      // Créer le PDF
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -663,11 +807,9 @@ export default function AdminEmploitudtemps() {
       let heightLeft = imgHeight;
       let position = 0;
 
-      // Ajouter la première page
       pdf.addImage(imgData, 'JPEG', 10, 10, imgWidth, Math.min(imgHeight, pdfHeight - 20));
       heightLeft -= (pdfHeight - 20);
 
-      // Ajouter des pages supplémentaires si nécessaire
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
@@ -675,11 +817,9 @@ export default function AdminEmploitudtemps() {
         heightLeft -= (pdfHeight - 20);
       }
 
-      // Générer le nom du fichier
       const fileName = `emploi-du-temps-${toLocalDateString(currentWeekStart)}.pdf`;
       pdf.save(fileName);
 
-      // Nettoyer
       document.body.removeChild(pdfContainer);
       
       showToastNotification('✅ PDF exporté avec succès !', 'success');
@@ -718,69 +858,58 @@ export default function AdminEmploitudtemps() {
     setEmailData({ ...emailData, recipients: [] });
   };
 
-  // src/pagesAdmin/AdminEmploiDuTemps.jsx - Fonction handleSendEmails corrigée
-
-const handleSendEmails = async () => {
-  if (emailData.recipients.length === 0) {
-    showToastNotification('Aucun étudiant sélectionné', 'error');
-    return;
-  }
-  
-  setSendingEmail(true);
-  try {
-    // Récupérer les étudiants sélectionnés
-    const selectedStudents = etudiants.filter(e => emailData.recipients.includes(e.id));
-    
-    if (selectedStudents.length === 0) {
-      showToastNotification('Les étudiants sélectionnés n\'existent pas', 'error');
-      setSendingEmail(false);
+  const handleSendEmails = async () => {
+    if (emailData.recipients.length === 0) {
+      showToastNotification('Aucun étudiant sélectionné', 'error');
       return;
     }
-
-    // Construire le payload SIMPLIFIÉ pour le backend
-    const defaultNiveau = filters.niveau || 'L1';
-    const defaultParcours = filters.parcours || 'GL';
-
-    const payload = {
-      niveau: defaultNiveau,
-      parcours: defaultParcours,
-      // Le backend peut optionnellement recevoir une liste de recipients
-      recipients: emailData.recipients.map(id => parseInt(id)),
-      // Optionnel : sujet personnalisé
-      subject: emailData.subject || `Emploi du temps ENI - Semaine du ${getWeekRange()}`,
-      // Optionnel : contenu HTML personnalisé
-      htmlContent: emailData.message || generateEmailHTML(),
-      // Optionnel : début de semaine
-      weekStart: toLocalDateString(currentWeekStart)
-    };
-
-    console.log('📧 Payload envoyé:', payload);
-
-    const response = await emailService.sendEmploiDuTemps(payload);
     
-    if (response.success) {
-      showToastNotification(response.message || '📧 Emails envoyés avec succès !', 'success');
-      setTimeout(() => setShowEmailModal(false), 2000);
-    } else {
-      showToastNotification(response.message || 'Erreur lors de l\'envoi', 'error');
+    setSendingEmail(true);
+    try {
+      const selectedStudents = etudiants.filter(e => emailData.recipients.includes(e.id));
+      
+      if (selectedStudents.length === 0) {
+        showToastNotification('Les étudiants sélectionnés n\'existent pas', 'error');
+        setSendingEmail(false);
+        return;
+      }
+
+      const defaultNiveau = filters.niveau || 'L1';
+      const defaultParcours = filters.parcours || 'GL';
+
+      const payload = {
+        niveau: defaultNiveau,
+        parcours: defaultParcours,
+        recipients: emailData.recipients.map(id => parseInt(id)),
+        subject: emailData.subject || `Emploi du temps ENI - Semaine du ${getWeekRange()}`,
+        htmlContent: emailData.message || generateEmailHTML(),
+        weekStart: toLocalDateString(currentWeekStart)
+      };
+
+      const response = await emailService.sendEmploiDuTemps(payload);
+      
+      if (response.success) {
+        showToastNotification(response.message || '📧 Emails envoyés avec succès !', 'success');
+        setTimeout(() => setShowEmailModal(false), 2000);
+      } else {
+        showToastNotification(response.message || 'Erreur lors de l\'envoi', 'error');
+      }
+    } catch (error) {
+      console.error('❌ Erreur envoi emails:', error);
+      
+      if (error.response?.data?.error) {
+        showToastNotification(error.response.data.error, 'error');
+      } else if (error.response?.data?.message) {
+        showToastNotification(error.response.data.message, 'error');
+      } else if (error.message) {
+        showToastNotification(`Erreur: ${error.message}`, 'error');
+      } else {
+        showToastNotification('Erreur lors de l\'envoi des emails', 'error');
+      }
+    } finally {
+      setSendingEmail(false);
     }
-  } catch (error) {
-    console.error('❌ Erreur envoi emails:', error);
-    
-    // Gestion des erreurs détaillée
-    if (error.response?.data?.error) {
-      showToastNotification(error.response.data.error, 'error');
-    } else if (error.response?.data?.message) {
-      showToastNotification(error.response.data.message, 'error');
-    } else if (error.message) {
-      showToastNotification(`Erreur: ${error.message}`, 'error');
-    } else {
-      showToastNotification('Erreur lors de l\'envoi des emails', 'error');
-    }
-  } finally {
-    setSendingEmail(false);
-  }
-};
+  };
 
   const generateEmailHTML = () => {
     const weekRange = getWeekRange();
@@ -878,23 +1007,24 @@ const handleSendEmails = async () => {
     return html;
   };
 
-  // Styles (simplifiés pour la lisibilité)
+  // ===================== STYLES AVEC VARIABLES CSS =====================
   const styles = {
     container: {
       padding: '24px 32px',
-      maxWidth: '1400px',
+      maxWidth: '1200px',
       margin: '0 auto',
-      minHeight: '100vh',
-      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-      color: isDark ? '#f1f5f9' : '#1e293b',
       fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, sans-serif',
-      transition: 'all 0.3s ease',
+      minHeight: '100vh',
+      backgroundColor: 'var(--bg-primary, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
     },
+
+    // En-tête
     headerSection: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '28px',
+      marginBottom: '24px',
       flexWrap: 'wrap',
       gap: '16px',
     },
@@ -903,29 +1033,37 @@ const handleSendEmails = async () => {
       alignItems: 'center',
       gap: '16px',
     },
+    headerIcon: {
+      width: '48px',
+      height: '48px',
+      borderRadius: '12px',
+      background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 4px 16px rgba(37, 99, 235, 0.25)',
+    },
     pageTitle: {
       fontSize: '28px',
       fontWeight: 700,
-      background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      marginBottom: '4px',
+      margin: 0,
+      fontFamily: '"Poppins", "Inter", sans-serif',
+      color: 'var(--text-primary, #1e293b)',
     },
     pageSubtitle: {
-      color: isDark ? '#94a3b8' : '#64748b',
       fontSize: '14px',
+      margin: '4px 0 0',
+      color: 'var(--text-secondary, #64748b)',
     },
     headerActions: {
       display: 'flex',
       gap: '12px',
-      flexWrap: 'wrap',
-      alignItems: 'center',
     },
     addButton: {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '12px 24px',
+      padding: '10px 24px',
       background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
       color: 'white',
       border: 'none',
@@ -933,16 +1071,51 @@ const handleSendEmails = async () => {
       cursor: 'pointer',
       fontWeight: 600,
       fontSize: '14px',
-      boxShadow: '0 4px 15px rgba(37, 99, 235, 0.3)',
-      transition: 'all 0.3s ease',
+      transition: 'all 0.2s ease',
+      boxShadow: '0 4px 6px rgba(37, 99, 235, 0.2)',
     },
-    navigationCard: {
-      background: isDark ? '#1e293b' : '#ffffff',
-      borderRadius: '16px',
-      padding: '20px',
+
+    // Statistiques
+    statsContainer: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: '16px',
       marginBottom: '24px',
-      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-      boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+    },
+    statCard: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      padding: '16px 20px',
+      borderRadius: '12px',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      backgroundColor: 'var(--bg-card, #ffffff)',
+      boxShadow: '0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.05))',
+      transition: 'all 0.2s ease',
+    },
+    statIcon: {
+      color: '#2563eb',
+    },
+    statValue: {
+      fontSize: '24px',
+      fontWeight: 700,
+      color: 'var(--text-primary, #1e293b)',
+    },
+    statLabel: {
+      fontSize: '13px',
+      fontWeight: 500,
+      color: 'var(--text-secondary, #64748b)',
+    },
+
+    // Navigation
+    navigationCard: {
+      background: 'var(--bg-card, #ffffff)',
+      backdropFilter: 'blur(12px)',
+      borderRadius: '16px',
+      padding: '20px 24px',
+      marginBottom: '24px',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      boxShadow: '0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.05))',
       transition: 'all 0.3s ease',
     },
     navRow: {
@@ -959,39 +1132,39 @@ const handleSendEmails = async () => {
       flexWrap: 'wrap',
     },
     navButton: {
-      padding: '10px 14px',
-      background: isDark ? '#334155' : '#f1f5f9',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '10px 16px',
+      background: 'var(--bg-input, #f8fafc)',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '10px',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      color: 'var(--text-primary, #1e293b)',
       transition: 'all 0.2s ease',
     },
     currentWeekButton: {
-      padding: '10px 18px',
+      padding: '10px 20px',
       background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
       cursor: 'pointer',
       fontWeight: 600,
-      fontSize: '13px',
+      fontSize: '14px',
       display: 'flex',
       alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
-      transition: 'all 0.2s ease',
+      boxShadow: '0 4px 16px rgba(37, 99, 235, 0.3)',
+      transition: 'all 0.3s ease',
     },
     weekInfo: {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      padding: '10px 18px',
-      background: isDark ? '#334155' : '#f8fafc',
+      gap: '10px',
+      padding: '10px 20px',
+      background: 'var(--bg-input, #f8fafc)',
       borderRadius: '10px',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      color: 'var(--text-primary, #1e293b)',
       fontWeight: 600,
       fontSize: '14px',
     },
@@ -1004,74 +1177,81 @@ const handleSendEmails = async () => {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '10px 16px',
+      padding: '10px 18px',
       borderRadius: '10px',
       cursor: 'pointer',
       fontWeight: 500,
       fontSize: '13px',
       border: 'none',
       transition: 'all 0.2s ease',
+      background: 'var(--bg-input, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
     },
     filterButton: {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '10px 16px',
-      background: isDark ? '#334155' : '#f1f5f9',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '10px 18px',
+      background: 'var(--bg-input, #f8fafc)',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '10px',
       cursor: 'pointer',
       fontSize: '13px',
-      color: isDark ? '#f1f5f9' : '#475569',
+      color: 'var(--text-primary, #1e293b)',
       transition: 'all 0.2s ease',
     },
     exportButton: {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '10px 18px',
-      background: '#10b981',
+      padding: '10px 20px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
       cursor: 'pointer',
       fontWeight: 600,
       fontSize: '13px',
-      transition: 'all 0.2s ease',
+      boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+      transition: 'all 0.3s ease',
     },
     emailButton: {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '10px 18px',
-      background: '#3b82f6',
+      padding: '10px 20px',
+      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
       cursor: 'pointer',
       fontWeight: 600,
       fontSize: '13px',
-      transition: 'all 0.2s ease',
+      boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)',
+      transition: 'all 0.3s ease',
     },
+
+    // Filtres
     filtersPanel: {
       marginTop: '20px',
       paddingTop: '20px',
-      borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderTop: '1px solid var(--border-color, #e2e8f0)',
     },
     filtersGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '12px',
+      gap: '14px',
       marginBottom: '16px',
     },
     filterSelect: {
-      padding: '10px 12px',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '12px 14px',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '10px',
-      background: isDark ? '#1e293b' : '#ffffff',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      background: 'var(--bg-input, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
       fontSize: '14px',
       transition: 'all 0.2s ease',
+      cursor: 'pointer',
     },
     filterActions: {
       display: 'flex',
@@ -1081,122 +1261,134 @@ const handleSendEmails = async () => {
       gap: '12px',
     },
     resetButton: {
-      padding: '8px 16px',
-      background: isDark ? '#334155' : '#f1f5f9',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-      borderRadius: '8px',
+      padding: '8px 18px',
+      background: 'var(--bg-input, #f8fafc)',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      borderRadius: '10px',
       cursor: 'pointer',
       fontSize: '13px',
-      color: isDark ? '#f1f5f9' : '#475569',
+      color: 'var(--text-secondary, #64748b)',
       transition: 'all 0.2s ease',
     },
     filterResult: {
-      fontSize: '13px',
-      color: isDark ? '#94a3b8' : '#64748b',
+      fontSize: '14px',
+      color: 'var(--text-secondary, #64748b)',
+      fontWeight: 500,
     },
+
+    // Grille des cours
     gridContainer: {
       display: 'grid',
       gridTemplateColumns: 'repeat(6, 1fr)',
       gap: '20px',
     },
     dayCard: {
-      background: isDark ? '#1e293b' : '#ffffff',
+      background: 'var(--bg-card, #ffffff)',
+      backdropFilter: 'blur(12px)',
       borderRadius: '16px',
-      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      border: '1px solid var(--border-color, #e2e8f0)',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       height: 'auto',
       minHeight: '450px',
-      boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
-      transition: 'all 0.3s ease',
+      boxShadow: '0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.05))',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     },
     dayCardPassed: {
-      opacity: 0.6,
+      opacity: 0.5,
     },
     dayCardHeader: {
-      padding: '14px 16px',
-      background: isDark ? '#0f172a' : '#f8fafc',
-      borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      padding: '16px 20px',
+      background: 'var(--bg-input, #f8fafc)',
+      borderBottom: '1px solid var(--border-color, #e2e8f0)',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
     },
     dayName: {
       fontWeight: 700,
-      fontSize: '16px',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      fontSize: '17px',
+      color: 'var(--text-primary, #1e293b)',
+      letterSpacing: '-0.01em',
     },
     dayDate: {
-      fontSize: '11px',
-      color: isDark ? '#94a3b8' : '#94a3b8',
+      fontSize: '12px',
+      color: 'var(--text-secondary, #64748b)',
       marginTop: '2px',
+      fontWeight: 500,
     },
     courseCount: {
-      padding: '4px 10px',
+      padding: '4px 12px',
       borderRadius: '20px',
-      background: isDark ? '#334155' : '#e2e8f0',
+      background: 'var(--bg-input, #f8fafc)',
       fontSize: '12px',
-      fontWeight: 600,
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      fontWeight: 700,
+      color: 'var(--text-primary, #1e293b)',
     },
     courseList: {
-      padding: '12px',
+      padding: '14px',
       flex: 1,
       overflowY: 'auto',
+      maxHeight: '400px',
     },
     emptyState: {
       textAlign: 'center',
-      padding: '40px 20px',
-      color: isDark ? '#64748b' : '#94a3b8',
-      fontSize: '13px',
+      padding: '48px 20px',
+      color: 'var(--text-muted, #94a3b8)',
+      fontSize: '14px',
+      fontWeight: 500,
     },
     courseCard: {
-      padding: '12px',
+      padding: '14px 16px',
       marginBottom: '10px',
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: 'var(--bg-input, #f8fafc)',
       borderRadius: '12px',
-      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-      transition: 'all 0.2s ease',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     },
     courseCardPassed: {
-      opacity: 0.7,
+      opacity: 0.5,
     },
     courseTitle: {
       fontWeight: 700,
       marginBottom: '8px',
-      fontSize: '14px',
-      color: isDark ? '#f1f5f9' : '#1e293b',
-    },
-    courseInfo: {
-      fontSize: '11px',
-      color: isDark ? '#94a3b8' : '#64748b',
+      fontSize: '15px',
+      color: 'var(--text-primary, #1e293b)',
       display: 'flex',
       alignItems: 'center',
-      gap: '4px',
+      gap: '8px',
+    },
+    courseInfo: {
+      fontSize: '12px',
+      color: 'var(--text-secondary, #64748b)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
       marginBottom: '4px',
     },
     courseMeta: {
       display: 'flex',
       gap: '6px',
-      marginTop: '8px',
+      marginTop: '10px',
       marginBottom: '10px',
       flexWrap: 'wrap',
     },
     courseBadge: {
       fontSize: '10px',
-      padding: '3px 8px',
-      borderRadius: '6px',
+      padding: '3px 10px',
+      borderRadius: '8px',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '3px',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      gap: '4px',
+      color: 'var(--text-primary, #1e293b)',
+      fontWeight: 600,
     },
     courseBadgeNiveau: {
-      background: isDark ? '#334155' : '#e2e8f0',
+      background: 'var(--bg-input, #f8fafc)',
     },
     courseBadgeParcours: {
-      background: '#7c3aed',
+      background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
       color: 'white',
     },
     actionButtons: {
@@ -1204,46 +1396,54 @@ const handleSendEmails = async () => {
       gap: '8px',
       marginTop: '12px',
       paddingTop: '10px',
-      borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderTop: '1px solid var(--border-color, #e2e8f0)',
     },
     editBtn: {
-      flex: 1,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '8px',
+      padding: '8px 12px',
       background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
       cursor: 'pointer',
       transition: 'all 0.2s ease',
+      fontWeight: 500,
+      fontSize: '13px',
+      flex: 1,
+      minWidth: '44px',
     },
     editBtnDisabled: {
       opacity: 0.4,
       cursor: 'not-allowed',
     },
     deleteBtn: {
-      flex: 1,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '8px',
+      padding: '8px 12px',
       background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
       cursor: 'pointer',
       transition: 'all 0.2s ease',
+      fontWeight: 500,
+      fontSize: '13px',
+      flex: 1,
+      minWidth: '44px',
     },
     deleteBtnDisabled: {
       opacity: 0.4,
       cursor: 'not-allowed',
     },
+
+    // Modals
     modalOverlay: {
       position: 'fixed',
       inset: 0,
-      background: 'rgba(0,0,0,0.6)',
+      background: 'rgba(0, 0, 0, 0.6)',
       backdropFilter: 'blur(4px)',
       display: 'flex',
       alignItems: 'center',
@@ -1252,13 +1452,14 @@ const handleSendEmails = async () => {
       padding: '20px',
     },
     modalContent: {
-      background: isDark ? '#1e293b' : '#ffffff',
-      borderRadius: '20px',
+      background: 'var(--bg-card, #ffffff)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '16px',
       width: '560px',
       maxWidth: '100%',
       maxHeight: '90vh',
       overflow: 'hidden',
-      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)',
       animation: 'scaleIn 0.25s ease-out',
     },
     modalHeader: {
@@ -1274,36 +1475,36 @@ const handleSendEmails = async () => {
       gap: '12px',
     },
     modalIconWrapper: {
-      background: 'rgba(255,255,255,0.2)',
+      background: 'rgba(255, 255, 255, 0.2)',
       padding: '10px',
-      borderRadius: '14px',
+      borderRadius: '12px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     },
     modalTitle: {
       fontSize: '20px',
-      fontWeight: 700,
+      fontWeight: 600,
       color: 'white',
       margin: 0,
     },
     modalSubtitle: {
       fontSize: '12px',
-      color: 'rgba(255,255,255,0.8)',
+      color: 'rgba(255, 255, 255, 0.85)',
       margin: '4px 0 0 0',
     },
     modalClose: {
-      background: 'rgba(255,255,255,0.2)',
+      background: 'rgba(255, 255, 255, 0.15)',
       border: 'none',
       borderRadius: '50%',
-      width: '32px',
-      height: '32px',
+      width: '36px',
+      height: '36px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       cursor: 'pointer',
       color: 'white',
-      transition: 'all 0.2s',
+      transition: 'all 0.2s ease',
     },
     modalBody: {
       padding: '24px',
@@ -1314,9 +1515,9 @@ const handleSendEmails = async () => {
       display: 'flex',
       gap: '12px',
       justifyContent: 'flex-end',
-      padding: '16px 24px 20px 24px',
-      borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-      background: isDark ? '#0f172a' : '#fafbfc',
+      padding: '16px 24px',
+      borderTop: '1px solid var(--border-color, #e2e8f0)',
+      background: 'var(--bg-input, #f8fafc)',
     },
     formGroup: {
       marginBottom: '16px',
@@ -1325,7 +1526,7 @@ const handleSendEmails = async () => {
       display: 'block',
       fontSize: '13px',
       fontWeight: 600,
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      color: 'var(--text-primary, #1e293b)',
       marginBottom: '6px',
     },
     requiredStar: {
@@ -1336,24 +1537,25 @@ const handleSendEmails = async () => {
     },
     input: {
       width: '100%',
-      padding: '10px 12px',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '10px 14px',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '10px',
       fontSize: '14px',
-      background: isDark ? '#0f172a' : '#ffffff',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      background: 'var(--bg-input, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
       transition: 'all 0.2s ease',
       boxSizing: 'border-box',
     },
     select: {
       width: '100%',
-      padding: '10px 12px',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '10px 14px',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '10px',
       fontSize: '14px',
-      background: isDark ? '#0f172a' : '#ffffff',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      background: 'var(--bg-input, #f8fafc)',
+      color: 'var(--text-primary, #1e293b)',
       transition: 'all 0.2s ease',
+      cursor: 'pointer',
     },
     grid2: {
       display: 'grid',
@@ -1363,116 +1565,149 @@ const handleSendEmails = async () => {
     },
     cancelBtn: {
       padding: '10px 24px',
-      borderRadius: '10px',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-      background: isDark ? '#1e293b' : '#ffffff',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      borderRadius: '40px',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      background: 'var(--bg-card, #ffffff)',
+      color: 'var(--text-secondary, #64748b)',
       cursor: 'pointer',
       fontWeight: 500,
-      fontSize: '13px',
+      fontSize: '14px',
       transition: 'all 0.2s ease',
     },
     saveBtn: {
       padding: '10px 24px',
-      borderRadius: '10px',
+      borderRadius: '40px',
       border: 'none',
       background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
       color: 'white',
       cursor: 'pointer',
       fontWeight: 600,
-      fontSize: '13px',
+      fontSize: '14px',
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
       transition: 'all 0.2s ease',
     },
-    notification: {
-      position: 'fixed',
-      bottom: '24px',
-      right: '24px',
-      zIndex: 2000,
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '14px 24px',
-      borderRadius: '12px',
-      color: 'white',
-      boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-      animation: 'slideIn 0.3s ease-out',
-    },
+
+    // Email Modal
     emailModalContent: {
-      background: isDark ? '#1e293b' : '#ffffff',
-      borderRadius: '20px',
+      background: 'var(--bg-card, #ffffff)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '16px',
       width: '700px',
       maxWidth: '100%',
       maxHeight: '90vh',
       overflow: 'hidden',
-      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)',
     },
     emailInfo: {
       display: 'flex',
       alignItems: 'center',
-      gap: '10px',
-      padding: '12px',
-      background: isDark ? '#0f172a' : '#f0fdf4',
-      borderRadius: '12px',
+      gap: '12px',
+      padding: '14px 18px',
+      background: 'rgba(16, 185, 129, 0.08)',
+      borderRadius: '10px',
       marginBottom: '20px',
       fontSize: '13px',
-      color: isDark ? '#a7f3d0' : '#166534',
+      color: '#065F46',
+      border: '1px solid rgba(16, 185, 129, 0.15)',
     },
     studentsList: {
       maxHeight: '280px',
       overflowY: 'auto',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-      borderRadius: '12px',
+      border: '1px solid var(--border-color, #e2e8f0)',
+      borderRadius: '10px',
       padding: '8px',
+      background: 'var(--bg-input, #f8fafc)',
     },
     studentCheckbox: {
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      padding: '10px',
+      gap: '14px',
+      padding: '10px 14px',
       cursor: 'pointer',
-      borderBottom: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      borderBottom: '1px solid var(--border-color, #e2e8f0)',
+      color: 'var(--text-primary, #1e293b)',
+      transition: 'all 0.2s ease',
+      borderRadius: '8px',
     },
     smallButton: {
-      padding: '5px 12px',
-      fontSize: '11px',
-      background: isDark ? '#334155' : '#f1f5f9',
-      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+      padding: '6px 14px',
+      fontSize: '12px',
+      background: 'var(--bg-input, #f8fafc)',
+      border: '1px solid var(--border-color, #e2e8f0)',
       borderRadius: '8px',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '4px',
-      color: isDark ? '#f1f5f9' : '#1e293b',
+      gap: '6px',
+      color: 'var(--text-secondary, #64748b)',
+      transition: 'all 0.2s ease',
     },
+
+    // Confirmation Modal
     confirmationModalContent: {
-      background: isDark ? '#1e293b' : '#ffffff',
-      borderRadius: '24px',
-      padding: '32px',
+      background: 'var(--bg-card, #ffffff)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '16px',
+      padding: '36px',
       width: '420px',
       maxWidth: '90%',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)',
+      animation: 'scaleIn 0.25s ease-out',
+    },
+
+    // Matière
+    matiereAddButton: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '8px 16px',
+      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      color: 'white',
+      border: 'none',
+      borderRadius: '10px',
+      cursor: 'pointer',
+      fontSize: '13px',
+      fontWeight: 600,
+      transition: 'all 0.3s ease',
+      whiteSpace: 'nowrap',
+      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+    },
+
+    notification: {
+      position: 'fixed',
+      bottom: '32px',
+      right: '32px',
+      zIndex: 2000,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '12px 20px',
+      borderRadius: '12px',
+      color: 'white',
+      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
+      animation: 'slideIn 0.3s ease-out',
+    },
+
+    spinnerSmall: {
+      width: '16px',
+      height: '16px',
+      border: '2px solid rgba(255,255,255,0.3)',
+      borderTopColor: 'white',
+      borderRadius: '50%',
+      animation: 'spin 0.8s linear infinite',
     },
   };
 
+  // ===================== RENDU =====================
   if (loading) {
     return (
       <div style={styles.container}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
-          <div style={{ textAlign: 'center' }}>
-            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#2563eb', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '18px', fontWeight: 600, color: isDark ? '#f1f5f9' : '#1e293b' }}>Chargement de l'emploi du temps...</h3>
-            <p style={{ fontSize: '13px', color: isDark ? '#94a3b8' : '#64748b' }}>Veuillez patienter</p>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', gap: '16px' }}>
+          <div style={{ width: '40px', height: '40px', border: '3px solid var(--border-color, #e2e8f0)', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-secondary, #64748b)' }}>Chargement de l'emploi du temps...</p>
         </div>
-        <style>{`
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
@@ -1485,7 +1720,7 @@ const handleSendEmails = async () => {
           ...styles.notification,
           backgroundColor: notification.type === 'success' ? '#10b981' : '#ef4444'
         }}>
-          {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          {notification.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
           <span style={{ fontWeight: 500 }}>{notification.message}</span>
         </div>
       )}
@@ -1493,6 +1728,9 @@ const handleSendEmails = async () => {
       {/* En-tête */}
       <div style={styles.headerSection}>
         <div style={styles.headerLeft}>
+          <div style={styles.headerIcon}>
+            <Calendar size={24} color="white" />
+          </div>
           <div>
             <h1 style={styles.pageTitle}>📅 Emploi du temps</h1>
             <p style={styles.pageSubtitle}>Gestion des cours et planning hebdomadaire</p>
@@ -1504,15 +1742,67 @@ const handleSendEmails = async () => {
             style={styles.addButton}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 20px rgba(37, 99, 235, 0.4)';
+              e.currentTarget.style.boxShadow = '0 6px 12px rgba(37, 99, 235, 0.3)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 4px 15px rgba(37, 99, 235, 0.3)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(37, 99, 235, 0.2)';
             }}
           >
             <Plus size={18} /> Ajouter un cours
           </button>
+        </div>
+      </div>
+
+      {/* Statistiques */}
+      <div style={styles.statsContainer}>
+        <div style={styles.statCard}>
+          <BarChart3 size={24} style={styles.statIcon} />
+          <div>
+            <div style={styles.statValue}>{totalCourses}</div>
+            <div style={styles.statLabel}>Total cours</div>
+          </div>
+        </div>
+        <div style={styles.statCard}>
+          <Calendar size={24} style={styles.statIcon} />
+          <div>
+            <div style={styles.statValue}>{Object.values(jourStats).filter(v => v > 0).length}</div>
+            <div style={styles.statLabel}>Jours actifs</div>
+          </div>
+        </div>
+        <div style={styles.statCard}>
+          <GraduationCap size={24} style={styles.statIcon} />
+          <div>
+            <div style={styles.statValue}>{Object.values(niveauStats).filter(v => v > 0).length}</div>
+            <div style={styles.statLabel}>Niveaux actifs</div>
+          </div>
+        </div>
+        <div style={styles.statCard}>
+          <BookOpen size={24} style={styles.statIcon} />
+          <div>
+            <div style={styles.statValue}>{Object.values(parcoursStats).filter(v => v > 0).length}</div>
+            <div style={styles.statLabel}>Parcours actifs</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistiques détaillées */}
+      <div style={{ ...styles.statsContainer, gridTemplateColumns: '1fr', marginBottom: '24px' }}>
+        <div style={{ ...styles.statCard, flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary, #1e293b)', fontSize: '13px' }}>📊 Répartition :</span>
+          {NIVEAUX.map(niveau => (
+            <span key={niveau} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: 'var(--bg-input, #f8fafc)', color: 'var(--text-secondary, #64748b)' }}>{niveau}</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#2563eb' }}>{niveauStats[niveau] || 0}</span>
+            </span>
+          ))}
+          <span style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '12px' }}>•</span>
+          {PARCOURS.map(p => (
+            <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: 'var(--bg-input, #f8fafc)', color: 'var(--text-secondary, #64748b)' }}>{p.icon} {p.label}</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#2563eb' }}>{parcoursStats[p.id] || 0}</span>
+            </span>
+          ))}
         </div>
       </div>
 
@@ -1521,39 +1811,31 @@ const handleSendEmails = async () => {
         <div style={styles.navRow}>
           <div style={styles.navLeft}>
             <button onClick={previousWeek} style={styles.navButton}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #e2e8f0)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input, #f8fafc)'}
             >
               <ChevronLeft size={20} />
             </button>
             <button onClick={goToCurrentWeek} style={styles.currentWeekButton}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(37, 99, 235, 0.4)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(37, 99, 235, 0.4)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'none';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 99, 235, 0.3)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(37, 99, 235, 0.3)';
               }}
             >
               <RefreshCw size={16} style={{ marginRight: '8px' }} /> Semaine actuelle
             </button>
             <button onClick={nextWeek} style={styles.navButton}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #e2e8f0)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input, #f8fafc)'}
             >
               <ChevronRight size={20} />
             </button>
             <div style={styles.weekInfo}>
-              <Calendar size={16} />
+              <Calendar size={18} />
               <span>{getWeekRange()}</span>
             </div>
           </div>
@@ -1561,12 +1843,8 @@ const handleSendEmails = async () => {
             {/* Recherche semaine */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowWeekSearch(!showWeekSearch)} style={styles.actionButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#e2e8f0';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #e2e8f0)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input, #f8fafc)'}
               >
                 <Search size={18} /> Rechercher
               </button>
@@ -1576,25 +1854,28 @@ const handleSendEmails = async () => {
                   top: '100%',
                   right: 0,
                   marginTop: '8px',
-                  background: isDark ? '#1e293b' : 'white',
-                  border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-                  borderRadius: '10px',
-                  padding: '12px',
+                  background: 'var(--bg-card, #ffffff)',
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  borderRadius: '12px',
+                  padding: '16px',
                   display: 'flex',
-                  gap: '8px',
+                  gap: '10px',
                   zIndex: 100,
-                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+                  boxShadow: '0 16px 48px rgba(0, 0, 0, 0.15)',
+                  minWidth: '240px',
                 }}>
                   <input 
                     type="date" 
                     value={searchDate} 
                     onChange={(e) => setSearchDate(e.target.value)} 
                     style={{
-                      padding: '8px',
-                      border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-                      borderRadius: '8px',
-                      background: isDark ? '#0f172a' : '#ffffff',
-                      color: isDark ? '#f1f5f9' : '#1e293b',
+                      padding: '10px 14px',
+                      border: '1px solid var(--border-color, #e2e8f0)',
+                      borderRadius: '10px',
+                      background: 'var(--bg-input, #f8fafc)',
+                      color: 'var(--text-primary, #1e293b)',
+                      flex: 1,
+                      fontSize: '14px',
                     }} 
                   />
                   <button onClick={() => {
@@ -1607,21 +1888,29 @@ const handleSendEmails = async () => {
                       }
                     }
                   }} style={{
-                    padding: '8px 16px',
-                    background: '#2563eb',
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     cursor: 'pointer',
                     fontWeight: 600,
-                  }}>OK</button>
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+                  >OK</button>
                   <button onClick={() => setShowWeekSearch(false)} style={{
-                    padding: '8px',
-                    background: isDark ? '#334155' : '#f1f5f9',
-                    border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
-                    borderRadius: '8px',
+                    padding: '10px',
+                    background: 'var(--bg-input, #f8fafc)',
+                    border: '1px solid var(--border-color, #e2e8f0)',
+                    borderRadius: '10px',
                     cursor: 'pointer',
-                    color: isDark ? '#f1f5f9' : '#1e293b',
+                    color: 'var(--text-primary, #1e293b)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}><X size={18} /></button>
                 </div>
               )}
@@ -1631,31 +1920,26 @@ const handleSendEmails = async () => {
               onClick={() => setShowFilters(!showFilters)} 
               style={{
                 ...styles.filterButton,
-                background: showFilters ? '#2563eb' : (isDark ? '#334155' : '#f1f5f9'),
-                color: showFilters ? 'white' : (isDark ? '#f1f5f9' : '#475569'),
-              }}
-              onMouseEnter={(e) => {
-                if (!showFilters) {
-                  e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!showFilters) {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                }
+                background: showFilters 
+                  ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' 
+                  : 'var(--bg-input, #f8fafc)',
+                color: showFilters ? 'white' : 'var(--text-primary, #1e293b)',
+                border: showFilters ? 'none' : '1px solid var(--border-color, #e2e8f0)',
               }}
             >
               <Filter size={18} /> Filtres
-              {(filters.niveau || filters.parcours || filters.prof || filters.salle) && (
+              {(filters.niveau || filters.parcours || filters.prof || filters.salle || filters.matiere_id) && (
                 <span style={{
                   backgroundColor: showFilters ? 'rgba(255,255,255,0.2)' : '#2563eb',
                   color: 'white',
                   borderRadius: '50%',
-                  padding: '0 6px',
+                  padding: '0 8px',
                   fontSize: '10px',
                   fontWeight: 700,
+                  minWidth: '20px',
+                  textAlign: 'center',
                 }}>
-                  {[filters.niveau, filters.parcours, filters.prof, filters.salle].filter(Boolean).length}
+                  {[filters.niveau, filters.parcours, filters.prof, filters.salle, filters.matiere_id].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -1664,20 +1948,11 @@ const handleSendEmails = async () => {
               disabled={exporting || filteredCourses.length === 0} 
               style={{
                 ...styles.exportButton,
-                opacity: (exporting || filteredCourses.length === 0) ? 0.6 : 1,
+                opacity: (exporting || filteredCourses.length === 0) ? 0.5 : 1,
                 cursor: (exporting || filteredCourses.length === 0) ? 'not-allowed' : 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                if (!exporting && filteredCourses.length > 0) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!exporting && filteredCourses.length > 0) {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                }
+                background: (exporting || filteredCourses.length === 0) 
+                  ? 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)' 
+                  : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               }}
             >
               {exporting ? (
@@ -1696,18 +1971,9 @@ const handleSendEmails = async () => {
               style={{
                 ...styles.emailButton,
                 opacity: filteredCourses.length === 0 ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (filteredCourses.length > 0) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (filteredCourses.length > 0) {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                }
+                background: filteredCourses.length === 0 
+                  ? 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)' 
+                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
               }}
             >
               <Mail size={18} /> Envoyer
@@ -1736,19 +2002,27 @@ const handleSendEmails = async () => {
                 <option value="">🚪 Toutes salles</option>
                 {salles.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
               </select>
+              <select value={filters.matiere_id} onChange={(e) => setFilters({...filters, matiere_id: e.target.value})} style={styles.filterSelect}>
+                <option value="">📖 Toutes matières</option>
+                {matieres.map(m => (
+                  <option key={m.id} value={m.id}>
+                    <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: m.couleur, marginRight: '8px' }}></span>
+                    {m.nom} {m.code ? `(${m.code})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div style={styles.filterActions}>
               <button onClick={resetFilters} style={styles.resetButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #e2e8f0)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input, #f8fafc)'}
               >
                 Réinitialiser les filtres
               </button>
-              <span style={styles.filterResult}>{filteredCourses.length} cours trouvés</span>
+              <span style={styles.filterResult}>
+                <Sparkles size={14} style={{ display: 'inline', marginRight: '6px', color: '#F59E0B' }} />
+                {filteredCourses.length} cours trouvés
+              </span>
             </div>
           </div>
         )}
@@ -1757,8 +2031,16 @@ const handleSendEmails = async () => {
       {/* Grille des cours */}
       <div style={styles.gridContainer} ref={exportRef}>
         {weekDays.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', background: isDark ? '#1e293b' : 'white', borderRadius: '16px' }}>
-            <p style={{ color: isDark ? '#94a3b8' : '#94a3b8' }}>Aucune semaine sélectionnée</p>
+          <div style={{ 
+            gridColumn: '1 / -1', 
+            textAlign: 'center', 
+            padding: '60px', 
+            background: 'var(--bg-card, #ffffff)',
+            borderRadius: '16px',
+            border: '1px solid var(--border-color, #e2e8f0)',
+          }}>
+            <Calendar size={48} style={{ margin: '0 auto 16px', opacity: 0.3, color: 'var(--text-muted, #94a3b8)' }} />
+            <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '16px', fontWeight: 500 }}>Aucune semaine sélectionnée</p>
           </div>
         ) : (
           weekDays.map((day, index) => {
@@ -1773,42 +2055,48 @@ const handleSendEmails = async () => {
               onMouseEnter={(e) => {
                 if (!passed) {
                   e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = isDark ? '0 8px 24px rgba(0,0,0,0.3)' : '0 8px 24px rgba(0,0,0,0.08)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px var(--shadow-color, rgba(0, 0, 0, 0.1))';
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'none';
-                e.currentTarget.style.boxShadow = isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.05)';
+                e.currentTarget.style.boxShadow = '0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.05))';
               }}
               >
                 <div style={styles.dayCardHeader}>
                   <div>
                     <div style={styles.dayName}>
                       {day.dayName}
-                      {passed && <span style={{ fontSize: '10px', color: '#ef4444', marginLeft: '4px' }}>(Passé)</span>}
+                      {passed && <span style={{ fontSize: '11px', color: '#EF4444', marginLeft: '6px', fontWeight: 500 }}>(Passé)</span>}
                     </div>
                     <div style={styles.dayDate}>{day.formattedDate}</div>
                   </div>
-                  <span style={styles.courseCount}>{dayCourses.length}</span>
+                  <span style={styles.courseCount}>
+                    {dayCourses.length}
+                  </span>
                 </div>
                 <div style={styles.courseList}>
                   {dayCourses.length === 0 ? (
-                    <div style={styles.emptyState}>Aucun cours</div>
+                    <div style={styles.emptyState}>
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>📭</div>
+                      Aucun cours
+                    </div>
                   ) : (
                     dayCourses.map(c => {
-                      const parcoursColor = '#7c3aed';
+                      const matiereColor = c.matiere_id ? getMatiereCouleur(c.matiere_id) : '#2563EB';
                       const passed = c.isPassed;
                       const modifiable = c.isModifiable;
                       
                       return (
                         <div key={c.id} style={{
                           ...styles.courseCard,
-                          ...(passed ? styles.courseCardPassed : {})
+                          ...(passed ? styles.courseCardPassed : {}),
+                          borderLeft: `4px solid ${matiereColor}`,
                         }}
                         onMouseEnter={(e) => {
                           if (!passed) {
                             e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.08)';
+                            e.currentTarget.style.boxShadow = '0 8px 24px var(--shadow-color, rgba(0, 0, 0, 0.08))';
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -1817,21 +2105,30 @@ const handleSendEmails = async () => {
                         }}
                       >
                           <div style={styles.courseTitle}>
-                            {c.matiere}
-                            {passed && <span style={{ fontSize: '10px', color: '#ef4444', marginLeft: '6px' }}>🔒</span>}
+                            <span style={{ 
+                              display: 'inline-block', 
+                              width: '12px', 
+                              height: '12px', 
+                              borderRadius: '50%', 
+                              background: matiereColor,
+                              border: '2px solid var(--border-color, #e2e8f0)',
+                              flexShrink: 0,
+                            }}></span>
+                            <span style={{ flex: 1 }}>{c.matiere}</span>
+                            {passed && <span style={{ fontSize: '12px', color: '#EF4444' }}>🔒</span>}
                           </div>
                           <div style={styles.courseInfo}>
-                            <ClockIcon size={12} /> {c.heure_debut?.substring(0,5) || ''} - {c.heure_fin?.substring(0,5) || ''}
+                            <ClockIcon size={14} /> {c.heure_debut?.substring(0,5) || ''} - {c.heure_fin?.substring(0,5) || ''}
                           </div>
                           <div style={styles.courseInfo}>
-                            <User size={12} /> {getProfName(c.user_id)}
+                            <User size={14} /> {getProfName(c.user_id)}
                           </div>
                           <div style={styles.courseInfo}>
-                            <DoorOpen size={12} /> {getSalleName(c.salle_id)}
+                            <DoorOpen size={14} /> {getSalleName(c.salle_id)}
                           </div>
                           <div style={styles.courseMeta}>
                             <span style={{ ...styles.courseBadge, ...styles.courseBadgeNiveau }}>
-                              <GraduationCap size={10} style={{ marginRight: '2px' }} /> {c.niveau}
+                              <GraduationCap size={10} style={{ marginRight: '4px' }} /> {c.niveau}
                             </span>
                             <span style={{ ...styles.courseBadge, ...styles.courseBadgeParcours }}>
                               {getParcoursIcon(c.parcours)} {getParcoursLabel(c.parcours)}
@@ -1848,7 +2145,7 @@ const handleSendEmails = async () => {
                               disabled={!modifiable}
                               title={!modifiable ? 'Impossible de modifier un cours passé' : 'Modifier le cours'}
                             >
-                              <Edit2 size={16} />
+                              <Edit2 size={18} />
                             </button>
                             <button 
                               onClick={() => handleDelete(c.id, c.matiere, c)} 
@@ -1859,7 +2156,7 @@ const handleSendEmails = async () => {
                               disabled={!modifiable}
                               title={!modifiable ? 'Impossible de supprimer un cours passé' : 'Supprimer le cours'}
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </div>
@@ -1877,43 +2174,60 @@ const handleSendEmails = async () => {
       {confirmationModal.show && (
         <div style={styles.modalOverlay} onClick={closeConfirmationModal}>
           <div style={styles.confirmationModalContent} onClick={e => e.stopPropagation()}>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{
-                width: '60px',
-                height: '60px',
+                width: '72px',
+                height: '72px',
                 borderRadius: '50%',
-                background: confirmationModal.action === 'delete' ? '#fee2e2' : '#dbeafe',
+                background: confirmationModal.action === 'delete' 
+                  ? 'linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)' 
+                  : 'linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 16px'
+                margin: '0 auto 16px',
+                boxShadow: confirmationModal.action === 'delete'
+                  ? '0 8px 24px rgba(239, 68, 68, 0.15)'
+                  : '0 8px 24px rgba(59, 130, 246, 0.15)',
               }}>
                 {confirmationModal.action === 'delete' 
-                  ? <Trash2 size={30} color="#dc2626" />
-                  : <Edit2 size={30} color="#3b82f6" />
+                  ? <Trash2 size={32} color="#DC2626" />
+                  : <Edit2 size={32} color="#3B82F6" />
                 }
               </div>
-              <h3 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '12px', color: isDark ? '#f1f5f9' : '#1e293b' }}>
+              <h3 style={{ 
+                fontSize: '24px', 
+                fontWeight: 700, 
+                marginBottom: '12px', 
+                color: 'var(--text-primary, #1e293b)'
+              }}>
                 {confirmationModal.action === 'delete' ? 'Confirmer la suppression' : 'Confirmer la modification'}
               </h3>
-              <p style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: '15px', lineHeight: '1.6' }}>
+              <p style={{ 
+                color: 'var(--text-secondary, #64748b)', 
+                fontSize: '15px', 
+                lineHeight: '1.7',
+                maxWidth: '320px',
+                margin: '0 auto',
+              }}>
                 {confirmationModal.action === 'delete' 
                   ? `Êtes-vous sûr de vouloir supprimer le cours "${confirmationModal.courseName}" ?`
                   : `Êtes-vous sûr de vouloir modifier le cours "${confirmationModal.courseName}" ?`
                 }
               </p>
-              <p style={{ color: isDark ? '#64748b' : '#94a3b8', fontSize: '13px', marginTop: '8px' }}>
-                Cette action est {confirmationModal.action === 'delete' ? 'irréversible' : 'permanente'}
+              <p style={{ 
+                color: 'var(--text-muted, #94a3b8)', 
+                fontSize: '13px', 
+                marginTop: '8px',
+                fontWeight: 500,
+              }}>
+                {confirmationModal.action === 'delete' ? '⚠️ Cette action est irréversible' : '📝 Cette action est permanente'}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button onClick={closeConfirmationModal} style={styles.cancelBtn}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isDark ? '#1e293b' : '#ffffff';
-                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #f1f5f9)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-card, #ffffff)'}
               >
                 <X size={18} /> Non, annuler
               </button>
@@ -1924,16 +2238,9 @@ const handleSendEmails = async () => {
                   background: confirmationModal.action === 'delete' 
                     ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' 
                     : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = confirmationModal.action === 'delete'
-                    ? '0 4px 15px rgba(239, 68, 68, 0.4)'
-                    : '0 4px 15px rgba(59, 130, 246, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
+                  boxShadow: confirmationModal.action === 'delete'
+                    ? '0 4px 16px rgba(239, 68, 68, 0.3)'
+                    : '0 4px 16px rgba(59, 130, 246, 0.3)',
                 }}
               >
                 {confirmationModal.action === 'delete' ? <Trash2 size={18} /> : <Edit2 size={18} />}
@@ -1944,7 +2251,7 @@ const handleSendEmails = async () => {
         </div>
       )}
 
-      {/* Modal Ajout/Modification */}
+      {/* Modal Ajout/Modification avec gestion des matières */}
       {showModal && (
         <div style={styles.modalOverlay} onClick={closeModal}>
           <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -1959,23 +2266,110 @@ const handleSendEmails = async () => {
                 </div>
               </div>
               <button onClick={closeModal} style={styles.modalClose}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
+              {/* Matière avec sélection et ajout */}
               <div style={styles.formGroup}>
-                <label style={styles.label}>Matière <span style={styles.requiredStar}>*</span></label>
+                <label style={styles.label}>
+                  Matière <span style={styles.requiredStar}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <select 
+                    value={form.matiere_id} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm({ 
+                        ...form, 
+                        matiere_id: val,
+                        matiere: val ? getMatiereNom(parseInt(val)) : ''
+                      });
+                    }}
+                    style={{
+                      ...styles.select,
+                      flex: 1,
+                    }}
+                  >
+                    <option value="">📚 Sélectionner une matière</option>
+                    {matieres.map(m => (
+                      <option key={m.id} value={m.id}>
+                        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: m.couleur, marginRight: '8px' }}></span>
+                        {m.nom} {m.code ? `(${m.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button 
+                    onClick={() => openMatiereModal()}
+                    style={styles.matiereAddButton}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+                      e.currentTarget.style.boxShadow = '0 8px 20px rgba(16, 185, 129, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'none';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+                    }}
+                  >
+                    <Plus size={16} /> Nouvelle
+                  </button>
+                </div>
+                {form.matiere_id && (
+                  <div style={{ 
+                    marginTop: '8px', 
+                    fontSize: '12px', 
+                    color: 'var(--text-secondary, #64748b)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 12px',
+                    background: 'rgba(16, 185, 129, 0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(16, 185, 129, 0.1)',
+                  }}>
+                    <span style={{ 
+                      display: 'inline-block', 
+                      width: '10px', 
+                      height: '10px', 
+                      borderRadius: '50%', 
+                      background: getMatiereCouleur(parseInt(form.matiere_id)) 
+                    }}></span>
+                    ✓ Matière sélectionnée : {getMatiereNom(parseInt(form.matiere_id))}
+                  </div>
+                )}
+              </div>
+
+              {/* Champ texte pour saisie manuelle */}
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Ou saisir manuellement</label>
                 <input 
                   type="text" 
                   placeholder="Ex: Algorithmique avancée" 
                   value={form.matiere} 
-                  onChange={e => setForm({ ...form, matiere: e.target.value })} 
+                  onChange={e => {
+                    setForm({ 
+                      ...form, 
+                      matiere: e.target.value,
+                      matiere_id: ''
+                    });
+                  }}
                   style={styles.input}
                 />
+                <div style={{ 
+                  fontSize: '11px', 
+                  color: 'var(--text-muted, #94a3b8)', 
+                  marginTop: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}>
+                  <AlertCircle size={12} />
+                  Si vous sélectionnez une matière ci-dessus, ce champ sera automatiquement rempli
+                </div>
               </div>
 
               <div style={styles.grid2}>
@@ -2055,7 +2449,7 @@ const handleSendEmails = async () => {
                   onChange={e => setForm({ ...form, user_id: parseInt(e.target.value) })} 
                   style={styles.select}
                 >
-                  <option value="">Sélectionner un professeur</option>
+                  <option value="">👨‍🏫 Sélectionner un professeur</option>
                   {profs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
@@ -2067,7 +2461,7 @@ const handleSendEmails = async () => {
                   onChange={e => setForm({ ...form, salle_id: parseInt(e.target.value) })} 
                   style={styles.select}
                 >
-                  <option value="">Sélectionner une salle</option>
+                  <option value="">🚪 Sélectionner une salle</option>
                   {salles.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
                 </select>
               </div>
@@ -2075,39 +2469,297 @@ const handleSendEmails = async () => {
 
             <div style={styles.modalFooter}>
               <button onClick={closeModal} style={styles.cancelBtn}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isDark ? '#1e293b' : '#ffffff';
-                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input-hover, #f1f5f9)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-card, #ffffff)'}
               >
                 Annuler
               </button>
               <button 
                 onClick={handleSave} 
-                disabled={!form.matiere || !form.user_id || !form.salle_id}
+                disabled={(!form.matiere_id && !form.matiere) || !form.user_id || !form.salle_id}
                 style={{
                   ...styles.saveBtn,
-                  opacity: (!form.matiere || !form.user_id || !form.salle_id) ? 0.5 : 1,
-                  cursor: (!form.matiere || !form.user_id || !form.salle_id) ? 'not-allowed' : 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  if (form.matiere && form.user_id && form.salle_id) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(37, 99, 235, 0.4)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (form.matiere && form.user_id && form.salle_id) {
-                    e.currentTarget.style.transform = 'none';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }
+                  opacity: ((!form.matiere_id && !form.matiere) || !form.user_id || !form.salle_id) ? 0.5 : 1,
+                  cursor: ((!form.matiere_id && !form.matiere) || !form.user_id || !form.salle_id) ? 'not-allowed' : 'pointer'
                 }}
               >
-                <Save size={16} /> {editId ? 'Modifier' : 'Ajouter'}
+                <Save size={18} /> {editId ? 'Modifier' : 'Ajouter'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Gestion des Matières */}
+      {showMatiereModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowMatiereModal(false)}>
+          <div style={{
+            ...styles.modalContent,
+            width: '640px',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalHeaderLeft}>
+                <div style={styles.modalIconWrapper}>
+                  <BookMarked size={22} color="white" />
+                </div>
+                <div>
+                  <h3 style={styles.modalTitle}>{editMatiereId ? 'Modifier la matière' : 'Nouvelle matière'}</h3>
+                  <p style={styles.modalSubtitle}>Gestion des matières</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMatiereModal(false)} style={styles.modalClose}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleMatiereSubmit}>
+              <div style={styles.modalBody}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nom <span style={styles.requiredStar}>*</span></label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Algorithmique" 
+                    value={matiereForm.nom} 
+                    onChange={(e) => setMatiereForm({...matiereForm, nom: e.target.value})}
+                    style={styles.input}
+                    required
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Code</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: ALGO" 
+                    value={matiereForm.code} 
+                    onChange={(e) => setMatiereForm({...matiereForm, code: e.target.value.toUpperCase()})}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Description</label>
+                  <textarea 
+                    placeholder="Description de la matière" 
+                    value={matiereForm.description} 
+                    onChange={(e) => setMatiereForm({...matiereForm, description: e.target.value})}
+                    style={{
+                      ...styles.input,
+                      minHeight: '60px',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Couleur</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '6px' }}>
+                    {COLORS.map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setMatiereForm({...matiereForm, couleur: color})}
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          background: color,
+                          border: matiereForm.couleur === color 
+                            ? '3px solid #2563EB' 
+                            : '2px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                          transform: matiereForm.couleur === color 
+                            ? 'scale(1.15)' 
+                            : 'scale(1)',
+                          boxShadow: matiereForm.couleur === color 
+                            ? '0 0 0 2px white, 0 0 0 4px #2563EB' 
+                            : 'none',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = matiereForm.couleur === color ? 'scale(1.15)' : 'scale(1)'}
+                      />
+                    ))}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      padding: '0 16px',
+                      fontSize: '13px',
+                      color: 'var(--text-secondary, #64748b)',
+                      gap: '8px',
+                      background: 'var(--bg-input, #f8fafc)',
+                      borderRadius: '8px',
+                      padding: '0 16px',
+                    }}>
+                      <Palette size={16} />
+                      <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{matiereForm.couleur}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={matiereForm.is_active} 
+                      onChange={(e) => setMatiereForm({...matiereForm, is_active: e.target.checked})}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#2563EB' }}
+                    />
+                    Matière active
+                  </label>
+                </div>
+
+                {/* Liste des matières existantes */}
+                {matieres.length > 0 && (
+                  <div style={{ 
+                    marginTop: '20px', 
+                    borderTop: '1px solid var(--border-color, #e2e8f0)', 
+                    paddingTop: '20px' 
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <label style={{ ...styles.label, marginBottom: 0, fontSize: '14px' }}>
+                        📚 Matières existantes ({matieres.length})
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <Search size={14} color="var(--text-muted, #94a3b8)" />
+                        <input 
+                          type="text" 
+                          placeholder="Rechercher..." 
+                          value={matiereSearch} 
+                          onChange={(e) => setMatiereSearch(e.target.value)}
+                          style={{
+                            padding: '6px 12px',
+                            border: '1px solid var(--border-color, #e2e8f0)',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            background: 'var(--bg-input, #f8fafc)',
+                            color: 'var(--text-primary, #1e293b)',
+                            width: '160px',
+                            transition: 'all 0.2s ease',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{
+                      maxHeight: '160px',
+                      overflowY: 'auto',
+                      border: '1px solid var(--border-color, #e2e8f0)',
+                      borderRadius: '12px',
+                      background: 'var(--bg-input, #f8fafc)',
+                    }}>
+                      {filteredMatieres.length === 0 ? (
+                        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
+                          Aucune matière trouvée
+                        </div>
+                      ) : (
+                        filteredMatieres.map(m => (
+                          <div key={m.id} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 16px',
+                            borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'var(--bg-input-hover, #f1f5f9)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ 
+                                display: 'inline-block', 
+                                width: '14px', 
+                                height: '14px', 
+                                borderRadius: '50%', 
+                                background: m.couleur,
+                                border: '2px solid var(--border-color, #e2e8f0)',
+                              }}></span>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary, #1e293b)' }}>{m.nom}</span>
+                              {m.code && <span style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)' }}>({m.code})</span>}
+                              {!m.is_active && (
+                                <span style={{ 
+                                  fontSize: '10px', 
+                                  color: '#EF4444',
+                                  background: 'rgba(239, 68, 68, 0.08)',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontWeight: 600,
+                                }}>❌ Inactif</span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => openMatiereModal(m)}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '8px',
+                                  border: 'none',
+                                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                  color: 'white',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  transition: 'all 0.2s ease',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMatiere(m.id)}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '8px',
+                                  border: 'none',
+                                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                  color: 'white',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  transition: 'all 0.2s ease',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button type="button" onClick={() => setShowMatiereModal(false)} style={styles.cancelBtn}>
+                  Annuler
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={!matiereForm.nom}
+                  style={{
+                    ...styles.saveBtn,
+                    opacity: !matiereForm.nom ? 0.5 : 1,
+                    cursor: !matiereForm.nom ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <Save size={18} /> {editMatiereId ? 'Modifier' : 'Ajouter'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2126,18 +2778,15 @@ const handleSendEmails = async () => {
                   <p style={styles.modalSubtitle}>Envoyer par email aux étudiants</p>
                 </div>
               </div>
-              <button onClick={() => setShowEmailModal(false)} style={styles.modalClose}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-              >
-                <X size={18} />
+              <button onClick={() => setShowEmailModal(false)} style={styles.modalClose}>
+                <X size={20} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
               <div style={styles.emailInfo}>
-                <FileText size={16} />
-                <span>Semaine du {getWeekRange()} - {filteredCourses.length} cours programmés</span>
+                <FileText size={18} />
+                <span>Semaine du {getWeekRange()} - <strong>{filteredCourses.length}</strong> cours programmés</span>
               </div>
 
               <div style={styles.formGroup}>
@@ -2152,43 +2801,27 @@ const handleSendEmails = async () => {
 
               <div style={styles.formGroup}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <label style={styles.label}>Destinataires ({emailData.recipients.length})</label>
+                  <label style={styles.label}>
+                    Destinataires <span style={{ fontWeight: '700', color: '#2563EB' }}>({emailData.recipients.length})</span>
+                  </label>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={selectAllStudents} style={styles.smallButton}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                      }}
-                    >
-                      <Users size={12} /> Tous
+                    <button onClick={selectAllStudents} style={styles.smallButton}>
+                      <Users size={14} /> Tous
                     </button>
-                    <button onClick={deselectAllStudents} style={styles.smallButton}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = isDark ? '#475569' : '#e2e8f0';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                      }}
-                    >
+                    <button onClick={deselectAllStudents} style={styles.smallButton}>
                       Aucun
                     </button>
                   </div>
                 </div>
                 <div style={styles.studentsList}>
                   {availableEtudiants.length === 0 ? (
-                    <div style={styles.emptyState}>Aucun étudiant trouvé</div>
+                    <div style={styles.emptyState}>
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>👤</div>
+                      Aucun étudiant trouvé
+                    </div>
                   ) : (
                     availableEtudiants.map(etudiant => (
-                      <label key={etudiant.id} style={styles.studentCheckbox}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = isDark ? '#0f172a' : '#f8fafc';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
+                      <label key={etudiant.id} style={styles.studentCheckbox}>
                         <input 
                           type="checkbox" 
                           checked={emailData.recipients.includes(etudiant.id)} 
@@ -2198,13 +2831,24 @@ const handleSendEmails = async () => {
                             } else {
                               setEmailData({...emailData, recipients: emailData.recipients.filter(id => id !== etudiant.id)});
                             }
-                          }} 
+                          }}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
                         />
                         <div>
-                          <div style={{ fontWeight: 500 }}>{etudiant.nom}</div>
-                          <div style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#64748b' }}>{etudiant.email}</div>
+                          <div style={{ fontWeight: 600 }}>{etudiant.nom}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)' }}>{etudiant.email}</div>
                         </div>
-                        <div style={{ marginLeft: 'auto', fontSize: '11px', color: isDark ? '#64748b' : '#94a3b8' }}>
+                        <div style={{ 
+                          marginLeft: 'auto', 
+                          fontSize: '11px', 
+                          color: 'var(--text-muted, #94a3b8)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: 'var(--bg-input, #f8fafc)',
+                          padding: '2px 10px',
+                          borderRadius: '12px',
+                        }}>
                           {etudiant.niveau} - {getParcoursIcon(etudiant.parcours)} {getParcoursLabel(etudiant.parcours)}
                         </div>
                       </label>
@@ -2215,14 +2859,7 @@ const handleSendEmails = async () => {
             </div>
 
             <div style={styles.modalFooter}>
-              <button onClick={() => setShowEmailModal(false)} style={styles.cancelBtn}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = isDark ? '#334155' : '#f1f5f9';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = isDark ? '#1e293b' : '#ffffff';
-                }}
-              >
+              <button onClick={() => setShowEmailModal(false)} style={styles.cancelBtn}>
                 Annuler
               </button>
               <button 
@@ -2230,29 +2867,19 @@ const handleSendEmails = async () => {
                 disabled={sendingEmail || emailData.recipients.length === 0} 
                 style={{
                   ...styles.saveBtn,
-                  background: '#10b981',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   opacity: (sendingEmail || emailData.recipients.length === 0) ? 0.5 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!sendingEmail && emailData.recipients.length > 0) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!sendingEmail && emailData.recipients.length > 0) {
-                    e.currentTarget.style.transform = 'none';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }
+                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
                 }}
               >
-                <Send size={16} /> {sendingEmail ? 'Envoi...' : `Envoyer (${emailData.recipients.length})`}
+                <Send size={18} /> {sendingEmail ? 'Envoi...' : `Envoyer (${emailData.recipients.length})`}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Animations CSS globales */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -2266,21 +2893,67 @@ const handleSendEmails = async () => {
           from { opacity: 0; transform: scale(0.95) translateY(-10px); }
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
-        
-        ::-webkit-scrollbar {
-          width: 4px;
-          height: 4px;
+
+        .add-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
         }
-        ::-webkit-scrollbar-track {
-          background: ${isDark ? '#1e293b' : '#f1f5f9'};
-          border-radius: 4px;
+
+        .nav-button:hover {
+          background: var(--bg-input-hover, #e2e8f0) !important;
+          transform: scale(1.05);
         }
-        ::-webkit-scrollbar-thumb {
-          background: ${isDark ? '#475569' : '#94a3b8'};
-          border-radius: 4px;
+
+        .action-button:hover {
+          background: var(--bg-input-hover, #e2e8f0) !important;
         }
-        ::-webkit-scrollbar-thumb:hover {
-          background: ${isDark ? '#64748b' : '#64748b'};
+
+        .filter-select:focus, .input:focus, .select:focus {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .stat-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.08));
+          transition: all 0.2s ease;
+        }
+
+        .day-card:hover:not(.day-card-passed) {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 40px var(--shadow-color, rgba(0, 0, 0, 0.1));
+        }
+
+        .edit-btn:hover:not(:disabled) {
+          transform: scale(1.05);
+          opacity: 0.9;
+        }
+
+        .delete-btn:hover:not(:disabled) {
+          transform: scale(1.05);
+          opacity: 0.9;
+        }
+
+        .save-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .cancel-btn:hover {
+          background: var(--bg-input-hover, #f1f5f9) !important;
+        }
+
+        .modal-close:hover {
+          background: rgba(255,255,255,0.25) !important;
+        }
+
+        .student-checkbox:hover {
+          background: var(--bg-input-hover, #f1f5f9) !important;
+          border-radius: 8px;
+        }
+
+        .small-button:hover {
+          background: var(--bg-input-hover, #e2e8f0) !important;
         }
 
         @media (max-width: 1200px) {
@@ -2288,23 +2961,60 @@ const handleSendEmails = async () => {
             grid-template-columns: repeat(3, 1fr) !important;
           }
         }
+
         @media (max-width: 768px) {
-          .container { padding: 16px !important; }
-          .header-section { flex-direction: column; align-items: stretch; }
-          .header-actions { flex-direction: column; }
-          .nav-row { flex-direction: column; align-items: stretch; }
-          .nav-left { flex-wrap: wrap; justify-content: center; }
-          .nav-right { flex-wrap: wrap; justify-content: center; }
-          .grid-container { grid-template-columns: repeat(2, 1fr) !important; }
-          .grid2 { grid-template-columns: 1fr !important; }
-          .filters-grid { grid-template-columns: 1fr !important; }
-          .modal-content { width: 95% !important; }
-          .email-modal-content { width: 95% !important; }
+          .container {
+            padding: 16px !important;
+          }
+          .header-section {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .header-actions {
+            flex-direction: column;
+          }
+          .nav-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .nav-left {
+            flex-wrap: wrap;
+            justify-content: center;
+          }
+          .nav-right {
+            flex-wrap: wrap;
+            justify-content: center;
+          }
+          .grid-container {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .grid2 {
+            grid-template-columns: 1fr !important;
+          }
+          .filters-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .modal-content {
+            width: 95% !important;
+          }
+          .email-modal-content {
+            width: 95% !important;
+          }
+          .stats-container {
+            grid-template-columns: 1fr;
+          }
         }
+
         @media (max-width: 480px) {
-          .grid-container { grid-template-columns: 1fr !important; }
-          .day-card { min-height: 350px !important; }
-          .confirmation-modal-content { width: 95% !important; }
+          .grid-container {
+            grid-template-columns: 1fr !important;
+          }
+          .day-card {
+            min-height: 350px !important;
+          }
+          .confirmation-modal-content {
+            width: 95% !important;
+          }
         }
       `}</style>
     </div>

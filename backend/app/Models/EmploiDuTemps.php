@@ -1,17 +1,18 @@
 <?php
-// app/Models/EmploiDuTemps.php
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class EmploiDuTemps extends Model
 {
-    protected $table = 'emplois_du_temps';
+    use HasFactory;
 
     protected $fillable = [
         'user_id',
         'salle_id',
+        'matiere_id',
         'matiere',
         'niveau',
         'parcours',
@@ -22,9 +23,8 @@ class EmploiDuTemps extends Model
     ];
 
     protected $casts = [
-        'date_debut_semaine' => 'date',
-        'heure_debut' => 'string',
-        'heure_fin' => 'string',
+        'heure_debut' => 'datetime:H:i',
+        'heure_fin' => 'datetime:H:i',
     ];
 
     public function prof()
@@ -37,21 +37,24 @@ class EmploiDuTemps extends Model
         return $this->belongsTo(Salle::class);
     }
 
-    // Scope pour filtrer par semaine
-    public function scopeForWeek($query, $weekStart)
+    public function matiereRelation()
     {
-        return $query->where('date_debut_semaine', $weekStart);
+        return $this->belongsTo(Matiere::class, 'matiere_id');
     }
 
-    // Scope pour filtrer par niveau
-    public function scopeForNiveau($query, $niveau)
+    public function getMatiereNomAttribute()
     {
-        return $query->where('niveau', $niveau);
+        if ($this->matiereRelation) {
+            return $this->matiereRelation->nom;
+        }
+        return $this->matiere;
     }
 
-    // Scope pour filtrer par parcours
-    public function scopeForParcours($query, $parcours)
+    public function getMatiereCouleurAttribute()
     {
-        return $query->where('parcours', $parcours);
+        if ($this->matiereRelation) {
+            return $this->matiereRelation->couleur;
+        }
+        return '#2563EB';
     }
 }

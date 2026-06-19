@@ -189,7 +189,15 @@ export const emailService = {
     }
   },
 };
-
+// ─── Matières ─────────────────────────────────────────────────────────────────
+export const matiereService = {
+  getAll: (params) => api.get('/matieres', { params }),
+  getList: () => api.get('/matieres/list'),
+  getOne: (id) => api.get(`/matieres/${id}`),
+  create: (data) => api.post('/matieres', data),
+  update: (id, data) => api.put(`/matieres/${id}`, data),
+  delete: (id) => api.delete(`/matieres/${id}`),
+};
 // ─── Prof Services (alias pour clarté) ──────────────────────────────────────
 export const dispoService = {
   getMyDispos: () => api.get('/mes-disponibilites'),
